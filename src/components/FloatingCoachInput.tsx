@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { FiSend, FiMic, FiVolume2, FiVolumeX, FiLoader, FiChevronDown, FiActivity, FiHeart, FiCoffee } from 'react-icons/fi';
+import { FiSend, FiMic, FiVolume2, FiVolumeX, FiLoader, FiChevronDown, FiActivity, FiHeart, FiCoffee, FiAlertCircle } from 'react-icons/fi';
 import { TerrainIcon } from './ui';
 import { useAudio } from '@/lib/use-audio';
 import { AgentType, AGENTS } from '@/lib/agents';
@@ -11,6 +11,7 @@ const AGENT_ICONS: Record<AgentType, React.ComponentType<any>> = {
   coach: FiActivity,
   psychologist: FiHeart,
   nutritionist: FiCoffee,
+  kinetotherapist: FiAlertCircle,
 };
 
 interface FloatingCoachInputProps {

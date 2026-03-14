@@ -1,15 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState, useMemo } from 'react';
+import { flushSync } from 'react-dom';
 import { Message, READINESS } from '@/lib/data';
-import { PulseDot, TypingDots, Card } from '../ui';
-import { FiSend, FiImage, FiActivity, FiCoffee, FiZap, FiHeart } from 'react-icons/fi';
-import { AgentType, AGENTS, AGENT_PROMPTS } from '@/lib/agents';
+import { PulseDot, Card } from '../ui';
+import { FiSend, FiImage, FiActivity, FiCoffee, FiZap, FiHeart, FiAlertCircle } from 'react-icons/fi';
+import { AgentType, AGENTS } from '@/lib/agents';
 
 const AGENT_ICONS: Record<AgentType, React.ComponentType<any>> = {
   coach: FiActivity,
   psychologist: FiHeart,
   nutritionist: FiCoffee,
+  kinetotherapist: FiAlertCircle,
 };
 
 interface ChatMessage {
@@ -91,6 +93,21 @@ function createInitialMessage(agent: AgentType, goals: UserGoals | null | undefi
 - **Macros**: Protein ${goals?.proteinGoal || 180}g | Carbs ${goals?.carbsGoal || 300}g | Fat ${goals?.fatGoal || 80}g
 
 **What would you like to eat today?**`,
+
+    kinetotherapist: `I'm **Dr. PHYSiO**, your kinetotherapist and rehabilitation specialist.
+
+## What I Do
+- Injury rehabilitation and recovery
+- Safe exercise modifications
+- Stretching and mobility work
+- Prehab exercises to prevent injuries
+- Return-to-play guidance
+- Pain management
+
+## Your Active Injuries
+I'll help you train safely while recovering.
+
+**What injury or rehabilitation question do you have?**`,
   };
 
   return {
@@ -104,14 +121,30 @@ function createInitialMessage(agent: AgentType, goals: UserGoals | null | undefi
 
 export default function CoachScreen({ goals }: Props) {
   const [selectedAgent, setSelectedAgent] = useState<AgentType>('coach');
-  const initialMessage = useMemo(() => createInitialMessage(selectedAgent, goals), [selectedAgent, goals]);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [typing, setTyping] = useState(false);
   const [input, setInput] = useState('');
-  const [initialized, setInitialized] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const initialized = useRef(false);
+  const isSending = useRef(false);
+  const messagesRef = useRef<Message[]>([]);
+
+  const initialMessages: Record<AgentType, string> = {
+    coach: "Hey! I'm Coach PEAK — your AI athletic coach. I can help with training, nutrition, recovery, and more. What do you need?",
+    psychologist: "Hello! I'm Dr. MIND — your sports psychologist. How are you feeling today?",
+    nutritionist: "Hi! I'm Chef PEAK — your nutrition coach. Ready to optimize your diet for peak performance?",
+    kinetotherapist: "Hello! I'm Dr. PHYSIO — your rehabilitation specialist. Got any injuries or pain to discuss?",
+  };
+
+  const createInitialMessage = (agent: AgentType) => ({
+    id: '1',
+    from: 'peak' as const,
+    text: initialMessages[agent],
+    time: now(),
+    showWave: true,
+  });
 
   useEffect(() => {
     const stored = sessionStorage.getItem('selectedAgent') as AgentType;
@@ -121,31 +154,53 @@ export default function CoachScreen({ goals }: Props) {
   }, []);
 
   useEffect(() => {
-    if (!initialized) {
-      setMessages([initialMessage]);
-      setInitialized(true);
+    if (!initialized.current) {
+      initialized.current = true;
+      
+      const storedMessages = sessionStorage.getItem('coachMessages');
+      const storedAgent = sessionStorage.getItem('selectedAgent') as AgentType;
+      
+      if (storedMessages && storedMessages !== '[]') {
+        try {
+          const parsed = JSON.parse(storedMessages);
+          console.log('[CoachUI] Loaded messages from storage:', parsed.length);
+          messagesRef.current = parsed;
+          setMessages(parsed);
+          if (storedAgent && AGENTS[storedAgent]) {
+            setSelectedAgent(storedAgent);
+          }
+          return;
+        } catch (e) {
+          console.log('[CoachUI] Failed to parse stored messages');
+        }
+      }
+      
+      const initial = [createInitialMessage(storedAgent || selectedAgent)];
+      messagesRef.current = initial;
+      setMessages(initial);
     }
-  }, [initialMessage, initialized]);
+  }, []);
 
   useEffect(() => {
-    const handleMessage = (e: Event) => {
-      const message = (e as CustomEvent).detail;
-      setInput(message);
-      sendToCoach(message);
-    };
-    const handleAgentChange = (e: Event) => {
-      const agent = (e as CustomEvent).detail as AgentType;
-      setSelectedAgent(agent);
-      setMessages([createInitialMessage(agent, goals)]);
-    };
-    
-    window.addEventListener('coachMessage' as any, handleMessage);
-    window.addEventListener('agentChanged' as any, handleAgentChange);
-    return () => {
-      window.removeEventListener('coachMessage' as any, handleMessage);
-      window.removeEventListener('agentChanged' as any, handleAgentChange);
-    };
-  }, [goals]);
+    if (messages.length > 0) {
+      sessionStorage.setItem('coachMessages', JSON.stringify(messages));
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    if (messagesRef.current.length > 0 && messages.length === 0) {
+      setMessages(messagesRef.current);
+    }
+  }, [messages.length]);
+
+  const handleAgentChange = (agent: AgentType) => {
+    setSelectedAgent(agent);
+    sessionStorage.setItem('selectedAgent', agent);
+    const newMsgs = [createInitialMessage(agent)];
+    messagesRef.current = newMsgs;
+    setMessages(newMsgs);
+    sessionStorage.setItem('coachMessages', JSON.stringify(newMsgs));
+  };
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
@@ -158,31 +213,15 @@ export default function CoachScreen({ goals }: Props) {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, typing]);
-
-  useEffect(() => {
-    if (initialized) return;
-    setInitialized(true);
-
-    const handleMessage = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      if (customEvent.detail) {
-        setTimeout(() => sendToCoach(customEvent.detail), 100);
-      }
-    };
-
-    const pendingMsg = sessionStorage.getItem('coachPendingMessage');
-    if (pendingMsg) {
-      sessionStorage.removeItem('coachPendingMessage');
-      setTimeout(() => sendToCoach(pendingMsg), 500);
-    }
-
-    window.addEventListener('coachMessage', handleMessage);
-    return () => window.removeEventListener('coachMessage', handleMessage);
-  }, [initialized]);
+  }, [messages]);
 
   const sendToCoach = async (text: string) => {
     if (!text.trim() && !selectedImage) return;
+    if (isSending.current) return;
+    
+    const currentMessages = messagesRef.current;
+    isSending.current = true;
+    console.log('[CoachUI] Sending, messages:', currentMessages.length);
 
     const userMessage: Message = {
       id: genId(),
@@ -191,19 +230,23 @@ export default function CoachScreen({ goals }: Props) {
       time: now(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setTyping(true);
+    const messagesWithUser = [...currentMessages, userMessage];
+    messagesRef.current = messagesWithUser;
+    
+    flushSync(() => {
+      setMessages(messagesWithUser);
+      setInput('');
+      setIsLoading(true);
+    });
 
     try {
-      const chatHistory: ChatMessage[] = messages
-        .filter(m => m.id !== '1')
+      const chatHistory: ChatMessage[] = messagesWithUser
         .map(m => ({
           role: m.from === 'peak' ? 'assistant' as const : 'user' as const,
-          content: m.text.replace(/<\/?strong>/g, ''),
+          content: (m.text || '').replace(/<\/?strong>/g, ''),
         }));
 
-      chatHistory.push({ role: 'user', content: text });
+      console.log('[CoachUI] Sending to API:', { messagesCount: chatHistory.length, agent: selectedAgent });
 
       const res = await fetch('/api/coach', {
         method: 'POST',
@@ -217,46 +260,66 @@ export default function CoachScreen({ goals }: Props) {
       });
 
       const data = await res.json();
+      console.log('[CoachUI] API response:', res.status);
 
       if (data.response) {
-        if (data.detectedAgent && data.detectedAgent !== selectedAgent) {
-          setSelectedAgent(data.detectedAgent);
-          sessionStorage.setItem('selectedAgent', data.detectedAgent);
-          setMessages([createInitialMessage(data.detectedAgent, goals)]);
-        }
-
         const formattedResponse = parseMarkdown(data.response);
 
-        setMessages(prev => [...prev, {
+        const newMessages: Message[] = [...messagesWithUser, {
           id: genId(),
-          from: 'peak',
+          from: 'peak' as const,
           text: formattedResponse,
           time: now(),
-        }]);
-
-        window.dispatchEvent(new CustomEvent('coachAIResponse', { detail: data.response }));
+        }];
+        console.log('[CoachUI] Adding response, total:', newMessages.length);
+        messagesRef.current = newMessages;
+        setMessages(newMessages);
       } else {
-        setMessages(prev => [...prev, {
+        const newMessages: Message[] = [...messagesWithUser, {
           id: genId(),
-          from: 'peak',
+          from: 'peak' as const,
           text: 'Sorry, I hit a snag. Try again.',
           time: now(),
-        }]);
+        }];
+        messagesRef.current = newMessages;
+        setMessages(newMessages);
       }
     } catch (error) {
       console.error('Coach error:', error);
-      setMessages(prev => [...prev, {
+      const newMessages: Message[] = [...messagesWithUser, {
         id: genId(),
-        from: 'peak',
+        from: 'peak' as const,
         text: 'Connection issue. Check your API key in .env.local',
         time: now(),
-      }]);
+      }];
+      messagesRef.current = newMessages;
+      setMessages(newMessages);
     } finally {
-      setTyping(false);
+      isSending.current = false;
       setSelectedImage(null);
+      setIsLoading(false);
       scrollToBottom();
     }
   };
+
+  useEffect(() => {
+    const handleMessage = (e: Event) => {
+      const message = (e as CustomEvent).detail;
+      setInput(message);
+      sendToCoach(message);
+    };
+    
+    const handleAgentChanged = (e: Event) => {
+      handleAgentChange((e as CustomEvent).detail as AgentType);
+    };
+    
+    window.addEventListener('coachMessage' as any, handleMessage);
+    window.addEventListener('agentChanged' as any, handleAgentChanged);
+    return () => {
+      window.removeEventListener('coachMessage' as any, handleMessage);
+      window.removeEventListener('agentChanged' as any, handleAgentChanged);
+    };
+  }, []);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -300,21 +363,27 @@ export default function CoachScreen({ goals }: Props) {
 
         <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
           {messages.map(msg => (
-            <div key={msg.id} style={{
-              display: 'flex', flexDirection: 'column',
-              alignSelf: msg.from === 'user' ? 'flex-end' : 'flex-start',
-              maxWidth: '80%',
-            }}>
+            <div 
+              key={msg.id} 
+              style={{
+                display: 'flex', flexDirection: 'column',
+                alignSelf: msg.from === 'user' ? 'flex-end' : 'flex-start',
+                maxWidth: '80%',
+                animation: 'fadeIn 0.3s ease-out',
+              }}
+            >
               {msg.from === 'peak' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <div style={{
                     width: 24, height: 24, borderRadius: 6,
                     background: AGENTS[selectedAgent].color,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>{(() => {
-                    const Icon = AGENT_ICONS[selectedAgent];
-                    return <Icon size={14} color="#000" />;
-                  })()}</div>
+                  }}>
+                    {(() => {
+                      const Icon = AGENT_ICONS[selectedAgent];
+                      return <Icon size={14} color="#000" />;
+                    })()}
+                  </div>
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{AGENTS[selectedAgent].name} PEAK</span>
                 </div>
               )}
@@ -338,23 +407,37 @@ export default function CoachScreen({ goals }: Props) {
               }}>{msg.time}</span>
             </div>
           ))}
-          {typing && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignSelf: 'flex-start', maxWidth: '80%' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          
+          {isLoading && (
+            <div style={{
+              display: 'flex', flexDirection: 'column',
+              alignSelf: 'flex-start', maxWidth: '80%',
+              animation: 'fadeIn 0.3s ease',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <div style={{
                   width: 24, height: 24, borderRadius: 6,
-                  background: 'var(--accent)',
+                  background: AGENTS[selectedAgent].color,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: 'var(--font-display)', fontSize: 12, color: '#000',
-                }}>P</div>
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Coach PEAK</span>
+                }}>
+                  {(() => {
+                    const Icon = AGENT_ICONS[selectedAgent];
+                    return <Icon size={14} color="#000" />;
+                  })()}
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{AGENTS[selectedAgent].name} PEAK</span>
               </div>
               <div style={{
                 padding: '16px 20px', borderRadius: '20px 20px 20px 8px',
                 background: 'var(--card)', border: '1px solid var(--border)',
-                display: 'flex', gap: 4, alignItems: 'center',
+                fontSize: 14, color: 'var(--muted)', fontStyle: 'italic',
               }}>
-                <TypingDots />
+                <span style={{ display: 'inline-flex', gap: 4 }}>
+                  <span style={{ animation: 'typingBounce 1s infinite', animationDelay: '0ms' }}>•</span>
+                  <span style={{ animation: 'typingBounce 1s infinite', animationDelay: '150ms' }}>•</span>
+                  <span style={{ animation: 'typingBounce 1s infinite', animationDelay: '300ms' }}>•</span>
+                </span>
+                <span style={{ marginLeft: 8 }}>Thinking...</span>
               </div>
             </div>
           )}

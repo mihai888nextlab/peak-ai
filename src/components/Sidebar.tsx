@@ -2,7 +2,7 @@
 
 import { signOut } from 'next-auth/react';
 import { Screen } from '@/lib/data';
-import { FiSun, FiActivity, FiCoffee, FiZap, FiUser, FiTrendingUp, FiTarget, FiSettings, FiClock, FiArrowRight, FiLogOut, FiSmartphone } from 'react-icons/fi';
+import { FiSun, FiActivity, FiCoffee, FiZap, FiUser, FiTrendingUp, FiTarget, FiSettings, FiClock, FiArrowRight, FiLogOut, FiSmartphone, FiAlertCircle } from 'react-icons/fi';
 import { TerrainIcon } from './ui';
 
 const MAIN_NAV = [
@@ -14,11 +14,12 @@ const MAIN_NAV = [
 ];
 
 const SECONDARY_NAV = [
-  { id: 'devices'   as Screen, icon: FiSmartphone,    label: 'Devices'     },
-  { id: 'profile'   as Screen, icon: FiUser,         label: 'Profile'    },
-  { id: 'analytics' as Screen, icon: FiTrendingUp,    label: 'Analytics'  },
-  { id: 'history'   as Screen, icon: FiClock,         label: 'History'    },
-  { id: 'goals'     as Screen, icon: FiTarget,        label: 'Goals'      },
+  { id: 'injuries' as Screen, icon: FiAlertCircle,   label: 'Injuries'    },
+  { id: 'devices'  as Screen, icon: FiSmartphone,    label: 'Devices'     },
+  { id: 'profile'  as Screen, icon: FiUser,          label: 'Profile'     },
+  { id: 'analytics' as Screen, icon: FiTrendingUp,   label: 'Analytics'   },
+  { id: 'history'  as Screen, icon: FiClock,         label: 'History'     },
+  { id: 'goals'    as Screen, icon: FiTarget,        label: 'Goals'       },
 ];
 
 interface UserData {

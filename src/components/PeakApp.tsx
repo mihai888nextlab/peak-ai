@@ -17,6 +17,7 @@ import HistoryScreen from './screens/HistoryScreen';
 import GoalsScreen from './screens/GoalsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import DevicesScreen from './screens/DevicesScreen';
+import InjuriesScreen from './screens/InjuriesScreen';
 import FloatingCoachInput from './FloatingCoachInput';
 
 interface UserGoals {
@@ -69,6 +70,7 @@ export default function PeakApp() {
       case 'goals': return <GoalsScreen goals={goals} onSave={updateGoals} />;
       case 'settings': return <SettingsScreen user={session?.user} onLogout={() => signOut({ callbackUrl: '/' })} />;
       case 'devices': return <DevicesScreen />;
+      case 'injuries': return <InjuriesScreen />;
     }
   };
 
