@@ -66,6 +66,9 @@ export default function TrainScreen() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const sessionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const [expandedWorkoutId, setExpandedWorkoutId] = useState<string | null>(null);
+  const [expandedExerciseIndex, setExpandedExerciseIndex] = useState(0);
 
   useEffect(() => {
     fetchWorkouts();
@@ -174,7 +177,14 @@ export default function TrainScreen() {
   const fetchWorkouts = async () => {
     try {
       const res = await fetch('/api/workouts');
+      if (!res.ok) {
+        console.error('Workouts API error:', res.status, await res.text());
+        setWorkouts([]);
+        setLoading(false);
+        return;
+      }
       const data = await res.json();
+      console.log('Workouts API response:', data);
       setWorkouts(data.workouts || []);
     } catch (err) {
       console.error('Failed to fetch workouts:', err);
@@ -534,6 +544,87 @@ export default function TrainScreen() {
         </button>
       </div>
 
+      <div style={s(0.15)}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 12 }}>
+          Quick Templates
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20 }}>
+          {[
+            { label: 'Push', color: '#ff6b6b' },
+            { label: 'Pull', color: '#4ecdc4' },
+            { label: 'Legs', color: '#45b7d1' },
+            { label: 'Upper', color: '#96ceb4' },
+            { label: 'Lower', color: '#ffeaa7' },
+            { label: 'Full', color: '#dfe6e9' },
+          ].map((template) => (
+            <button
+              key={template.label}
+              onClick={() => {
+                const templateExercises: Record<string, { name: string; sets: number; reps: string; restSeconds: number }[]> = {
+                  Push: [
+                    { name: 'Bench Press', sets: 4, reps: '8-10', restSeconds: 90 },
+                    { name: 'Overhead Press', sets: 3, reps: '8-12', restSeconds: 60 },
+                    { name: 'Incline Dumbbell Press', sets: 3, reps: '10-12', restSeconds: 60 },
+                    { name: 'Lateral Raises', sets: 3, reps: '15-20', restSeconds: 45 },
+                    { name: 'Tricep Pushdowns', sets: 3, reps: '12-15', restSeconds: 45 },
+                  ],
+                  Pull: [
+                    { name: 'Deadlift', sets: 4, reps: '5-8', restSeconds: 120 },
+                    { name: 'Pull-ups', sets: 3, reps: '6-12', restSeconds: 90 },
+                    { name: 'Barbell Rows', sets: 3, reps: '8-12', restSeconds: 60 },
+                    { name: 'Face Pulls', sets: 3, reps: '15-20', restSeconds: 45 },
+                    { name: 'Bicep Curls', sets: 3, reps: '10-15', restSeconds: 45 },
+                  ],
+                  Legs: [
+                    { name: 'Squats', sets: 4, reps: '6-10', restSeconds: 120 },
+                    { name: 'Romanian Deadlift', sets: 3, reps: '8-12', restSeconds: 90 },
+                    { name: 'Leg Press', sets: 3, reps: '10-15', restSeconds: 60 },
+                    { name: 'Leg Curls', sets: 3, reps: '10-15', restSeconds: 45 },
+                    { name: 'Calf Raises', sets: 3, reps: '15-20', restSeconds: 45 },
+                  ],
+                  Upper: [
+                    { name: 'Bench Press', sets: 3, reps: '8-12', restSeconds: 90 },
+                    { name: 'Pull-ups', sets: 3, reps: '6-12', restSeconds: 90 },
+                    { name: 'Overhead Press', sets: 3, reps: '8-12', restSeconds: 60 },
+                    { name: 'Barbell Rows', sets: 3, reps: '8-12', restSeconds: 60 },
+                    { name: 'Bicep Curls', sets: 2, reps: '12-15', restSeconds: 45 },
+                  ],
+                  Lower: [
+                    { name: 'Squats', sets: 4, reps: '8-12', restSeconds: 120 },
+                    { name: 'Romanian Deadlift', sets: 3, reps: '10-15', restSeconds: 90 },
+                    { name: 'Leg Press', sets: 3, reps: '12-15', restSeconds: 60 },
+                    { name: 'Leg Curls', sets: 3, reps: '12-15', restSeconds: 45 },
+                    { name: 'Planks', sets: 3, reps: '60s', restSeconds: 45 },
+                  ],
+                  Full: [
+                    { name: 'Squats', sets: 3, reps: '10-12', restSeconds: 90 },
+                    { name: 'Bench Press', sets: 3, reps: '10-12', restSeconds: 90 },
+                    { name: 'Pull-ups', sets: 3, reps: '6-12', restSeconds: 90 },
+                    { name: 'Overhead Press', sets: 3, reps: '10-12', restSeconds: 60 },
+                    { name: 'Dumbbell Rows', sets: 3, reps: '10-12', restSeconds: 60 },
+                    { name: 'Planks', sets: 3, reps: '45s', restSeconds: 45 },
+                  ],
+                };
+                const exercises = (templateExercises[template.label] || []).map((ex, i) => ({
+                  id: `template-${i}`,
+                  ...ex,
+                }));
+                setCurrentWorkout(exercises);
+                setWorkoutName(`${template.label} Day`);
+                setView('builder');
+              }}
+              style={{
+                padding: 14, borderRadius: 10, border: '1px solid var(--border)',
+                background: `${template.color}15`, color: 'var(--text)', fontSize: 13, fontWeight: 500,
+                cursor: 'pointer', textAlign: 'center',
+              }}
+            >
+              {template.label} Day
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div style={s(0.2)}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 12 }}>
           Your Workouts
@@ -547,26 +638,134 @@ export default function TrainScreen() {
           </Card>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {workouts.map(workout => (
-              <Card key={workout._id} style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 15, fontWeight: 500 }}>{workout.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-                    {workout.exercises.length} exercises
-                  </div>
-                </div>
-                <button
-                  onClick={() => startWorkout(workout)}
-                  style={{
-                    padding: '10px 16px', borderRadius: 8, border: 'none',
-                    background: 'var(--accent)', color: '#000', cursor: 'pointer',
-                    fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
-                  }}
-                >
-                  <FiPlay size={12} /> Start
-                </button>
-              </Card>
-            ))}
+            {workouts.map(workout => {
+              const isExpanded = expandedWorkoutId === workout._id;
+              const currentEx = workout.exercises[expandedExerciseIndex];
+              const nextEx = workout.exercises[expandedExerciseIndex + 1];
+              const totalEx = workout.exercises.length;
+              
+              return (
+                <Card key={workout._id} style={{ padding: 0, overflow: 'hidden' }}>
+                  {!isExpanded ? (
+                    <div style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 15, fontWeight: 500 }}>{workout.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+                          {workout.exercises.length} exercises
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setExpandedWorkoutId(workout._id);
+                          setExpandedExerciseIndex(0);
+                        }}
+                        style={{
+                          padding: '10px 16px', borderRadius: 8, border: 'none',
+                          background: 'var(--accent)', color: '#000', cursor: 'pointer',
+                          fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+                        }}
+                      >
+                        <FiPlay size={12} /> Start
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ padding: '12px 16px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                          <div style={{ fontSize: 16, fontWeight: 600 }}>{workout.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 2 }}>
+                            Exercise {expandedExerciseIndex + 1} of {totalEx}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setExpandedWorkoutId(null)}
+                          style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 4 }}
+                        >
+                          <FiX size={18} />
+                        </button>
+                      </div>
+                      
+                      {currentEx && (
+                        <div style={{ padding: 20 }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 4 }}>{currentEx.exerciseName}</div>
+                          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
+                            {currentEx.sets} x {currentEx.reps} · {currentEx.restSeconds}s rest
+                          </div>
+                          
+                          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                            {Array.from({ length: currentEx.sets }).map((_, i) => (
+                              <div key={i} style={{
+                                flex: 1, height: 8, borderRadius: 4,
+                                background: 'var(--subtle)',
+                              }} />
+                            ))}
+                          </div>
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
+                            {[
+                              { reps: parseInt(currentEx.reps) || 10, weight: 0 },
+                              { reps: (parseInt(currentEx.reps) || 10) - 2, weight: 0 },
+                              { reps: (parseInt(currentEx.reps) || 10) + 2, weight: 0 },
+                              { reps: parseInt(currentEx.reps) || 10, weight: 5 },
+                            ].map((preset, i) => (
+                              <button
+                                key={i}
+                                onClick={() => {
+                                  if (expandedExerciseIndex < totalEx - 1) {
+                                    setExpandedExerciseIndex(expandedExerciseIndex + 1);
+                                  }
+                                }}
+                                style={{
+                                  padding: 14, borderRadius: 8, border: 'none',
+                                  background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer',
+                                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                                }}
+                              >
+                                <span style={{ fontSize: 18, fontWeight: 600 }}>{preset.reps}</span>
+                                <span style={{ fontSize: 10, color: 'var(--muted)' }}>{preset.weight > 0 ? `+${preset.weight}kg` : 'reps'}</span>
+                              </button>
+                            ))}
+                          </div>
+                          
+                          {nextEx && (
+                            <div style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Next</span>
+                              <span style={{ fontSize: 13, color: 'var(--text)' }}>{nextEx.name}</span>
+                              <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 'auto' }}>{nextEx.sets} x {nextEx.reps}</span>
+                            </div>
+                          )}
+                          
+                          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                            {expandedExerciseIndex > 0 && (
+                              <button
+                                onClick={() => setExpandedExerciseIndex(expandedExerciseIndex - 1)}
+                                style={{
+                                  flex: 1, padding: 12, borderRadius: 8, border: '1px solid var(--border)',
+                                  background: 'transparent', color: 'var(--text)', cursor: 'pointer',
+                                  fontSize: 13, fontWeight: 500,
+                                }}
+                              >
+                                Previous
+                              </button>
+                            )}
+                            <button
+                              onClick={() => startWorkout(workout)}
+                              style={{
+                                flex: 1, padding: 12, borderRadius: 8, border: 'none',
+                                background: 'var(--accent)', color: '#000', cursor: 'pointer',
+                                fontSize: 13, fontWeight: 600,
+                              }}
+                            >
+                              {expandedExerciseIndex === totalEx - 1 ? 'Finish' : 'Next Exercise'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>

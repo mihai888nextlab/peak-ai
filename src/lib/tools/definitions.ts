@@ -156,6 +156,70 @@ Returns: Daily summaries with calories eaten/burned, steps, active minutes, and 
       required: [],
     },
   },
+  {
+    name: 'generate_workout',
+    description: `CALL THIS when user wants to create a workout, asks for workout suggestions, wants a new routine, or says things like "create a workout", "give me exercises", "what should I do today", "make me a push day", "generate leg workout".
+The AI will auto-select an appropriate split based on user's request. If user specifies "push", "pull", "legs", "upper", "lower", or "full body" use that. Otherwise will create a balanced workout.
+Returns: Generated workout with exercise name, sets, reps, and rest time. Workout is automatically saved to user's library.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        split_type: {
+          type: 'string',
+          enum: ['push', 'pull', 'legs', 'upper', 'lower', 'full_body', 'ppl'],
+          description: 'Type of workout split: push (chest/shoulders/triceps), pull (back/biceps), legs (quads/hamstrings/glutes), upper, lower, full_body, or ppl. Optional - will infer from user request.',
+        },
+        muscle_focus: {
+          type: 'string',
+          description: 'Optional specific muscle group to focus on (e.g., "chest", "back", "legs")',
+        },
+        num_exercises: {
+          type: 'string',
+          description: 'Number of exercises in the workout as a number or string (e.g., "6" or 6)',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'save_workout',
+    description: `CALL THIS after generate_workout when user wants to save the workout to their library. The user must confirm they want to save it.
+Input: workout name, exercises array with sets, reps, rest.
+Returns: Confirmation that workout was saved.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Name for the workout (e.g., "Push Day", "Leg Day")',
+        },
+        exercises: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              sets: { type: 'number' },
+              reps: { type: 'string' },
+              rest_seconds: { type: 'number' },
+            },
+          },
+          description: 'Array of exercises with name, sets, reps, rest time',
+        },
+      },
+      required: ['name', 'exercises'],
+    },
+  },
+  {
+    name: 'get_workouts',
+    description: `CALL THIS when user asks to see their saved workouts, workout library, or wants to start a specific workout.
+Returns: List of saved workouts with name and exercises.`,
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
 ];
 
 export const TOOL_NAMES = TOOL_DEFINITIONS.map(t => t.name);

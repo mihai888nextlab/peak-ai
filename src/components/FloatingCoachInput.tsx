@@ -91,7 +91,6 @@ export default function FloatingCoachInput({ currentScreen, onNavigate }: Floati
       }
     } else {
       window.dispatchEvent(new CustomEvent('coachMessage', { detail: message }));
-      window.dispatchEvent(new CustomEvent('agentChanged', { detail: selectedAgent }));
     }
   };
 

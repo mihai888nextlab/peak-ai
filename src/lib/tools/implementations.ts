@@ -6,6 +6,7 @@ import { getActiveInjuries, getUserInjuries, createInjury, markInjuryRecovered }
 import { getUserDailySummaries, getTodaySummary } from '@/lib/models/daily-summary';
 import { getTodayMeals } from '@/lib/models/meal';
 import { getUserStravaWorkouts } from '@/lib/models/strava-workout';
+import { getUserWorkouts, createWorkout, getAllExercises } from '@/lib/models/workout';
 import { chatCompletion } from '@/lib/groq';
 
 export interface ToolResult {
@@ -16,7 +17,7 @@ export interface ToolResult {
 
 async function getUserId(): Promise<string> {
   const session = await getServerSession(authOptions);
-  return session?.user?.email || '';
+  return session?.user?.id || '';
 }
 
 export async function get_user_goals(): Promise<ToolResult> {
@@ -277,6 +278,211 @@ export async function get_daily_summary(args?: { days?: number }): Promise<ToolR
   }
 }
 
+const WORKOUT_TEMPLATES: Record<string, { muscles: string[]; exercises: string[] }> = {
+  push: {
+    muscles: ['Chest', 'Shoulders', 'Triceps'],
+    exercises: ['Bench Press', 'Overhead Press', 'Incline Dumbbell Press', 'Lateral Raises', 'Tricep Pushdowns', 'Cable Flyes'],
+  },
+  pull: {
+    muscles: ['Back', 'Biceps', 'Rear Delts'],
+    exercises: ['Deadlift', 'Pull-ups', 'Barbell Rows', 'Face Pulls', 'Bicep Curls', 'Lat Pulldowns'],
+  },
+  legs: {
+    muscles: ['Quadriceps', 'Hamstrings', 'Glutes', 'Calves'],
+    exercises: ['Squats', 'Leg Press', 'Romanian Deadlift', 'Leg Curls', 'Leg Extensions', 'Calf Raises', 'Lunges'],
+  },
+  upper: {
+    muscles: ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps'],
+    exercises: ['Bench Press', 'Pull-ups', 'Overhead Press', 'Barbell Rows', 'Bicep Curls', 'Tricep Pushdowns'],
+  },
+  lower: {
+    muscles: ['Quadriceps', 'Hamstrings', 'Glutes', 'Core'],
+    exercises: ['Squats', 'Leg Press', 'Romanian Deadlift', 'Leg Curls', 'Calf Raises', 'Planks'],
+  },
+  full_body: {
+    muscles: ['Full Body'],
+    exercises: ['Squats', 'Deadlift', 'Bench Press', 'Pull-ups', 'Overhead Press', 'Rows', 'Lunges', 'Planks'],
+  },
+  ppl: {
+    muscles: ['Push', 'Pull', 'Legs'],
+    exercises: ['Push: Bench, Shoulder Press, Triceps', 'Pull: Deadlift, Pull-ups, Rows, Biceps', 'Legs: Squats, Leg Press, Curls'],
+  },
+};
+
+export async function generate_workout(args: { 
+  split_type?: string; 
+  muscle_focus?: string; 
+  num_exercises?: number;
+}): Promise<ToolResult> {
+  try {
+    let exercises: any[] = [];
+    try {
+      exercises = await getAllExercises();
+    } catch (e) {
+      console.log('[generate_workout] No exercises in DB, using defaults');
+    }
+
+    const splitInput = args.split_type || '';
+    const validSplits = ['push', 'pull', 'legs', 'upper', 'lower', 'full_body', 'ppl'];
+    const splitType = validSplits.includes(splitInput) ? splitInput : 'full_body';
+    const numExercises = typeof args.num_exercises === 'number' ? args.num_exercises : parseInt(String(args.num_exercises || '6')) || 6;
+    const template = WORKOUT_TEMPLATES[splitType] || WORKOUT_TEMPLATES.full_body;
+    
+    let selected: any[] = [];
+    
+    // Try to use exercises from database
+    if (exercises.length > 0) {
+      const targetMuscles = args.muscle_focus 
+        ? [args.muscle_focus]
+        : template.muscles;
+
+      const filtered = exercises.filter((ex: any) => 
+        ex.muscleGroups?.some((mg: string) => 
+          targetMuscles.some(t => mg.toLowerCase().includes(t.toLowerCase()))
+        )
+      );
+
+      const used = new Set<string>();
+      
+      for (let i = 0; i < Math.min(numExercises, filtered.length); i++) {
+        const available = filtered.filter((ex: any) => !used.has(ex.name));
+        if (!available.length) break;
+        
+        const randomIdx = Math.floor(Math.random() * available.length);
+        const exercise = available[randomIdx];
+        used.add(exercise.name);
+        
+        selected.push({
+          name: exercise.name,
+          sets: 3,
+          reps: '8-12',
+          rest_seconds: 60,
+          muscle_groups: exercise.muscleGroups,
+        });
+      }
+    }
+
+    // Fallback to template exercises if no database exercises
+    if (selected.length === 0) {
+      for (const exName of template.exercises.slice(0, numExercises)) {
+        selected.push({
+          name: exName,
+          sets: 3,
+          reps: '8-12',
+          rest_seconds: 60,
+        });
+      }
+    }
+
+    const splitNames: Record<string, string> = {
+      push: 'Push Day',
+      pull: 'Pull Day', 
+      legs: 'Leg Day',
+      upper: 'Upper Body',
+      lower: 'Lower Body',
+      full_body: 'Full Body',
+      ppl: 'PPL',
+    };
+
+    const workoutName = splitNames[splitType] || 'Workout';
+    const targetMuscles = args.muscle_focus 
+      ? [args.muscle_focus]
+      : (WORKOUT_TEMPLATES[splitType]?.muscles || ['Full Body']);
+
+    // Auto-save to database
+    const userId = await getUserId();
+    let savedWorkout = null;
+    if (userId) {
+      try {
+        const exercisesForDb = selected.map((e: any) => ({
+          exerciseId: '',
+          exerciseName: e.name,
+          sets: e.sets || 3,
+          reps: String(e.reps || '8-12'),
+          restSeconds: e.rest_seconds || 60,
+        }));
+        savedWorkout = await createWorkout({
+          userId,
+          name: workoutName,
+          exercises: exercisesForDb,
+          estimatedDuration: exercisesForDb.length * 15,
+        });
+      } catch (e) {
+        console.error('Failed to auto-save workout:', e);
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        name: workoutName,
+        split_type: splitType,
+        exercises: selected,
+        saved: !!savedWorkout,
+        workout_id: savedWorkout?._id?.toString(),
+        notes: `A ${splitType} workout targeting ${targetMuscles.join(', ')}. ${savedWorkout ? 'Saved to your workouts!' : ''}`,
+      },
+    };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function save_workout(args: { name?: string; exercises?: any[] }): Promise<ToolResult> {
+  try {
+    const userId = await getUserId();
+    if (!userId) return { success: false, error: 'Not authenticated' };
+    
+    if (!args.name) return { success: false, error: 'Workout name is required' };
+    if (!args.exercises || args.exercises.length === 0) return { success: false, error: 'No exercises to save' };
+
+    const exercises = args.exercises.map((e: any) => ({
+      exerciseId: '',
+      exerciseName: e.name,
+      sets: e.sets || 3,
+      reps: String(e.reps || '8-12'),
+      restSeconds: e.rest_seconds || 60,
+    }));
+
+    const workout = await createWorkout({
+      userId,
+      name: args.name,
+      exercises,
+      estimatedDuration: exercises.length * 15,
+    });
+
+    return { success: true, data: { id: workout._id.toString(), name: workout.name } };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function get_workouts(): Promise<ToolResult> {
+  try {
+    const userId = await getUserId();
+    if (!userId) return { success: false, error: 'Not authenticated' };
+    
+    const workouts = await getUserWorkouts(userId);
+    
+    return {
+      success: true,
+      data: workouts.map(w => ({
+        id: w._id.toString(),
+        name: w.name,
+        exercises: w.exercises.map(e => ({
+          name: e.exerciseName,
+          sets: e.sets,
+          reps: e.reps,
+          rest_seconds: e.restSeconds,
+        })),
+        exerciseCount: w.exercises.length,
+      })),
+    };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
 export const TOOL_FUNCTIONS: Record<string, (args?: any) => Promise<ToolResult>> = {
   get_user_goals,
   get_readiness_data,
@@ -288,4 +494,7 @@ export const TOOL_FUNCTIONS: Record<string, (args?: any) => Promise<ToolResult>>
   add_injury,
   mark_injury_recovered,
   get_daily_summary,
+  generate_workout,
+  save_workout,
+  get_workouts,
 };

@@ -19,11 +19,14 @@ export function getAuthOpts(): NextAuthOptions {
             const dbUser = await findUserByEmail(profile.email.toLowerCase());
             if (dbUser) {
               token.id = dbUser._id.toString();
+              token.email = dbUser.email;
             } else {
               token.id = user.id;
+              token.email = profile.email;
             }
           } else {
             token.id = user.id;
+            token.email = (user as any).email;
           }
         }
         if (account?.provider === 'strava') {
@@ -39,6 +42,7 @@ export function getAuthOpts(): NextAuthOptions {
       async session({ session, token }) {
         if (session.user) {
           session.user.id = token.id as string;
+          session.user.email = token.email as string;
           (session.user as any).stravaAccessToken = token.stravaAccessToken;
         }
         return session;

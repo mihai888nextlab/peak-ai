@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const workouts = await getUserWorkouts(session.user.id);
+    const workouts = await getUserWorkouts(session.user.id, session.user.email || undefined);
     return NextResponse.json({ workouts });
   } catch (error) {
     console.error('Failed to fetch workouts:', error);

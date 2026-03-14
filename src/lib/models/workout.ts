@@ -103,9 +103,12 @@ export async function searchExercises(query: string, muscleGroup?: string): Prom
   return collection.find(filter).toArray();
 }
 
-export async function getUserWorkouts(userId: string): Promise<Workout[]> {
+export async function getUserWorkouts(userId: string, email?: string): Promise<Workout[]> {
   const collection = await getWorkoutsCollection();
-  return collection.find({ userId }).sort({ createdAt: -1 }).toArray();
+  const filter = email 
+    ? { $or: [{ userId }, { userId: email }] }
+    : { userId };
+  return collection.find(filter).sort({ createdAt: -1 }).toArray();
 }
 
 export async function getWorkoutById(id: string): Promise<Workout | null> {
