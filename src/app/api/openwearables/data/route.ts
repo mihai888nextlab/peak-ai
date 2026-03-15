@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const userId = session.user.email || session.user.id;
+
   const searchParams = request.nextUrl.searchParams;
   const dataType = searchParams.get('type') || 'summary';
   const date = searchParams.get('date');
@@ -86,7 +88,7 @@ export async function GET(request: NextRequest) {
         ]);
         data = { activity, sleep, recovery, body };
 
-        await syncToDailySummary(session.user.id, dateStr, activity, sleep, recovery);
+        await syncToDailySummary(userId, dateStr, activity, sleep, recovery);
         break;
     }
 
@@ -103,6 +105,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const userId = session.user.email || session.user.id;
+
   try {
     const body = await request.json();
     const { provider, data_type } = body;
@@ -112,16 +116,18 @@ export async function POST(request: NextRequest) {
     }
 
     const owUserId = await getOrCreateOpenWearablesUser(session.user.id);
+    console.log('OpenWearables user ID:', owUserId);
     if (!owUserId) {
       return NextResponse.json({ error: 'Failed to get user' }, { status: 500 });
     }
 
-    const result = await syncProviderData(owUserId, provider, data_type || 'all');
-    
+    // Skip async sync, fetch directly
     let workoutsSaved = 0;
-    if (provider === 'strava' && session.user.id) {
+    if (provider === 'strava' && owUserId) {
       try {
         const workouts = await getUserWorkouts(owUserId, '2025-01-01', '2030-12-31');
+        console.log('Fetched workouts from Strava:', workouts?.length);
+        
         if (workouts && Array.isArray(workouts) && workouts.length > 0) {
           const formattedWorkouts = workouts.map((w: any) => ({
             id: w.id || w.workout_id || w.upload_id,
@@ -138,9 +144,11 @@ export async function POST(request: NextRequest) {
             elapsed_time: w.elapsed_time,
           }));
           
-          await saveMultipleStravaWorkouts(session.user.id, formattedWorkouts);
+          await saveMultipleStravaWorkouts(userId, formattedWorkouts);
+          workoutsSaved = formattedWorkouts.length;
+          console.log('Saved workouts:', workoutsSaved);
           
-          const allWorkouts = await getUserStravaWorkouts(session.user.id, 500);
+          const allWorkouts = await getUserStravaWorkouts(userId, 500);
           for (const w of allWorkouts) {
             if (!w.estimatedCalories || w.estimatedCalories === 0) {
               const estimated = await estimateCaloriesWithAI(
@@ -161,7 +169,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ owUserId, provider, result, workoutsSaved });
+    return NextResponse.json({ owUserId, provider, workoutsSaved });
   } catch (error) {
     console.error('OpenWearables sync error:', error);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });

@@ -7,7 +7,28 @@ import { getUserDailySummaries, getTodaySummary } from '@/lib/models/daily-summa
 import { getTodayMeals } from '@/lib/models/meal';
 import { getUserStravaWorkouts } from '@/lib/models/strava-workout';
 import { getUserWorkouts, createWorkout, getAllExercises } from '@/lib/models/workout';
+import { getDatabase } from '@/lib/mongodb';
 import { chatCompletion } from '@/lib/groq';
+
+async function logWaterToDb(userId: string, amount: number) {
+  const db = await getDatabase();
+  const collection = db.collection('water_logs');
+  const today = new Date().toISOString().split('T')[0];
+  const existing = await collection.findOne({ userId, date: today });
+  if (existing) {
+    await collection.updateOne({ _id: existing._id }, { $inc: { amount } });
+  } else {
+    await collection.insertOne({ userId, date: today, amount, createdAt: new Date() });
+  }
+}
+
+async function getWaterFromDb(userId: string) {
+  const db = await getDatabase();
+  const collection = db.collection('water_logs');
+  const today = new Date().toISOString().split('T')[0];
+  const log = await collection.findOne({ userId, date: today });
+  return log?.amount || 0;
+}
 
 export interface ToolResult {
   success: boolean;
@@ -17,7 +38,7 @@ export interface ToolResult {
 
 async function getUserId(): Promise<string> {
   const session = await getServerSession(authOptions);
-  return session?.user?.id || '';
+  return session?.user?.email || '';
 }
 
 export async function get_user_goals(): Promise<ToolResult> {
@@ -80,6 +101,59 @@ export async function get_today_nutrition(): Promise<ToolResult> {
           time: m.time,
         })),
         totals: { calories: totalCalories, protein: totalProtein, carbs: totalCarbs, fat: totalFat },
+      } 
+    };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function log_water(args: { amount: number | string }): Promise<ToolResult> {
+  try {
+    const userId = await getUserId();
+    if (!userId) return { success: false, error: 'Not authenticated' };
+
+    const amount = typeof args.amount === 'string' ? parseInt(args.amount, 10) : args.amount;
+    
+    if (isNaN(amount)) {
+      return { success: false, error: 'Invalid amount' };
+    }
+
+    await logWaterToDb(userId, amount);
+
+    const goals = await getUserGoals(userId);
+    const waterGoal = goals?.waterGoal || 2500;
+    const totalToday = await getWaterFromDb(userId);
+
+    return { 
+      success: true, 
+      data: { 
+        amount,
+        totalToday,
+        goal: waterGoal,
+        percentage: Math.round((totalToday / waterGoal) * 100),
+      } 
+    };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function get_water_intake(): Promise<ToolResult> {
+  try {
+    const userId = await getUserId();
+    if (!userId) return { success: false, error: 'Not authenticated' };
+
+    const goals = await getUserGoals(userId);
+    const waterGoal = goals?.waterGoal || 2500;
+    const totalToday = await getWaterFromDb(userId);
+
+    return { 
+      success: true, 
+      data: { 
+        amount: totalToday || 0,
+        goal: waterGoal,
+        percentage: Math.round(((totalToday || 0) / waterGoal) * 100),
       } 
     };
   } catch (error) {
@@ -489,6 +563,8 @@ export const TOOL_FUNCTIONS: Record<string, (args?: any) => Promise<ToolResult>>
   get_today_nutrition,
   get_meal_plan,
   create_meal_plan,
+  log_water,
+  get_water_intake,
   get_recent_workouts,
   get_injuries,
   add_injury,

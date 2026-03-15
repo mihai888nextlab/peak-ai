@@ -46,6 +46,8 @@ export interface Workout {
   estimatedDuration: number;
   createdAt: Date;
   updatedAt: Date;
+  lastCompletedAt?: Date;
+  caloriesBurned?: number;
 }
 
 export interface WorkoutSession {
@@ -103,11 +105,21 @@ export async function searchExercises(query: string, muscleGroup?: string): Prom
   return collection.find(filter).toArray();
 }
 
-export async function getUserWorkouts(userId: string, email?: string): Promise<Workout[]> {
+export async function getUserWorkouts(userId: string, email?: string, date?: string | null): Promise<Workout[]> {
   const collection = await getWorkoutsCollection();
-  const filter = email 
+  
+  const filter: any = email 
     ? { $or: [{ userId }, { userId: email }] }
     : { userId };
+
+  if (date) {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    filter.createdAt = { $gte: startOfDay, $lte: endOfDay };
+  }
+  
   return collection.find(filter).sort({ createdAt: -1 }).toArray();
 }
 

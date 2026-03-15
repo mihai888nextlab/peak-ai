@@ -108,7 +108,7 @@ export default function PeakApp() {
         </div>
       </div>
 
-      <FloatingCoachInput currentScreen={screen} onNavigate={setScreen} />
+      {ready && <FloatingCoachInput currentScreen={screen} onNavigate={setScreen} />}
     </>
   );
 }

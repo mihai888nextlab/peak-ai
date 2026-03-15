@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, calories, protein, carbs, fat, servingSize } = body;
+    const { name, calories, protein, carbs, fat, servingSize, fromMealPlan } = body;
 
     if (!name || !calories) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
       carbs: carbs || 0,
       fat: fat || 0,
       servingSize: servingSize || '1 serving',
+      fromMealPlan: fromMealPlan || null,
     });
 
     const today = new Date().toISOString().split('T')[0];
@@ -108,15 +109,24 @@ export async function DELETE(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
+    const fromMealPlan = searchParams.get('fromMealPlan');
 
-    if (!id) {
-      return NextResponse.json({ error: 'Meal ID required' }, { status: 400 });
+    if (!id && !fromMealPlan) {
+      return NextResponse.json({ error: 'Meal ID or fromMealPlan required' }, { status: 400 });
     }
 
     const mealsCollection = await getMealsCollection();
-    const meal = await mealsCollection.findOne({ _id: new ObjectId(id) });
-    
-    await deleteMealFromDb(id);
+    let meal;
+
+    if (id) {
+      meal = await mealsCollection.findOne({ _id: new ObjectId(id) });
+      await deleteMealFromDb(id);
+    } else if (fromMealPlan) {
+      meal = await mealsCollection.findOne({ userId: session.user.email, fromMealPlan });
+      if (meal) {
+        await deleteMealFromDb(meal._id.toString());
+      }
+    }
     
     if (meal?.date) {
       await syncCaloriesToSummary(session.user.email, meal.date);

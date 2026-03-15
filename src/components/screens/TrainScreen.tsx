@@ -7,7 +7,7 @@ import ExercisePicker from '../ExercisePicker';
 
 interface ExerciseInWorkout {
   id: string;
-  name: string;
+  exerciseName: string;
   sets: number;
   reps: string;
   restSeconds: number;
@@ -17,6 +17,8 @@ interface Workout {
   _id: string;
   name: string;
   exercises: ExerciseInWorkout[];
+  lastCompletedAt?: string;
+  caloriesBurned?: number;
 }
 
 interface ActiveSession {
@@ -78,10 +80,13 @@ export default function TrainScreen() {
 
   const fetchStravaWorkouts = async (forceRefresh: boolean = false) => {
     setStravaLoading(true);
+    const today = new Date().toISOString().split('T')[0];
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const startDate = thirtyDaysAgo.toISOString().split('T')[0];
     try {
-      // First try to get from our MongoDB (skip if forceRefresh)
       if (!forceRefresh) {
-        const dbRes = await fetch('/api/strava-workouts');
+        const dbRes = await fetch(`/api/strava-workouts?start_date=${startDate}&end_date=${today}`);
         if (dbRes.ok) {
           const dbData = await dbRes.json();
           if (dbData.workouts && dbData.workouts.length > 0) {
@@ -122,7 +127,7 @@ export default function TrainScreen() {
       }
 
       // Refetch from MongoDB (workouts should now be saved)
-      const dbRes = await fetch('/api/strava-workouts');
+      const dbRes = await fetch(`/api/strava-workouts?start_date=${startDate}&end_date=${today}`);
       if (dbRes.ok) {
         const dbData = await dbRes.json();
         if (dbData.workouts && dbData.workouts.length > 0) {
@@ -176,7 +181,8 @@ export default function TrainScreen() {
 
   const fetchWorkouts = async () => {
     try {
-      const res = await fetch('/api/workouts');
+      const today = new Date().toISOString().split('T')[0];
+      const res = await fetch(`/api/workouts?date=${today}`);
       if (!res.ok) {
         console.error('Workouts API error:', res.status, await res.text());
         setWorkouts([]);
@@ -193,6 +199,18 @@ export default function TrainScreen() {
     }
   };
 
+  const deleteWorkout = async (id: string) => {
+    if (!confirm('Delete this workout?')) return;
+    try {
+      const res = await fetch(`/api/workouts?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setWorkouts(workouts.filter(w => w._id !== id));
+      }
+    } catch (err) {
+      console.error('Failed to delete workout:', err);
+    }
+  };
+
   const checkActiveSession = async () => {
     try {
       const res = await fetch('/api/sessions?active=true');
@@ -206,8 +224,14 @@ export default function TrainScreen() {
     }
   };
 
-  const handleAddExercise = (exercise: { id: string; name: string; sets: number; reps: string; restSeconds: number }) => {
-    setCurrentWorkout([...currentWorkout, exercise]);
+  const handleAddExercise = (exercise: { id: string; name: string; exerciseName?: string; sets: number; reps: string; restSeconds: number }) => {
+    setCurrentWorkout([...currentWorkout, { 
+      id: exercise.id, 
+      exerciseName: exercise.exerciseName || exercise.name, 
+      sets: exercise.sets, 
+      reps: exercise.reps, 
+      restSeconds: exercise.restSeconds 
+    }]);
   };
 
   const handleRemoveExercise = (index: number) => {
@@ -254,7 +278,7 @@ export default function TrainScreen() {
       if (data.session) {
         const sessionExercises = workout.exercises.map(ex => ({
           exerciseId: ex.id,
-          exerciseName: ex.name,
+          exerciseName: ex.exerciseName,
           sets: [],
         }));
         setActiveSession({ ...data.session, exercises: sessionExercises });
@@ -367,7 +391,7 @@ export default function TrainScreen() {
                 <Card key={i} style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--muted)', width: 30 }}>{i + 1}</span>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 15, fontWeight: 500 }}>{ex.name}</div>
+                    <div style={{ fontSize: 15, fontWeight: 500 }}>{ex.exerciseName}</div>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
                       {ex.sets} x {ex.reps} · {ex.restSeconds}s rest
                     </div>
@@ -452,7 +476,7 @@ export default function TrainScreen() {
           <Card style={{ padding: 24, marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 36 }}>{currentExercise.name}</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 36 }}>{currentExercise.exerciseName}</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
                   Set {currentSetIndex + 1} of {currentExercise.sets} · {currentExercise.reps} reps · {currentExercise.restSeconds}s rest
                 </div>
@@ -510,7 +534,7 @@ export default function TrainScreen() {
                   fontSize: 12, cursor: 'pointer',
                 }}
               >
-                {i + 1}. {ex.name}
+                {i + 1}. {ex.exerciseName}
               </div>
             ))}
           </div>
@@ -607,7 +631,10 @@ export default function TrainScreen() {
                 };
                 const exercises = (templateExercises[template.label] || []).map((ex, i) => ({
                   id: `template-${i}`,
-                  ...ex,
+                  exerciseName: ex.name,
+                  sets: ex.sets,
+                  reps: ex.reps,
+                  restSeconds: ex.restSeconds,
                 }));
                 setCurrentWorkout(exercises);
                 setWorkoutName(`${template.label} Day`);
@@ -643,15 +670,38 @@ export default function TrainScreen() {
               const currentEx = workout.exercises[expandedExerciseIndex];
               const nextEx = workout.exercises[expandedExerciseIndex + 1];
               const totalEx = workout.exercises.length;
+              const isCompleted = !!workout.lastCompletedAt;
               
               return (
                 <Card key={workout._id} style={{ padding: 0, overflow: 'hidden' }}>
                   {!isExpanded ? (
                     <div style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 15, fontWeight: 500 }}>{workout.name}</div>
+                        <div style={{ fontSize: 15, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {workout.name}
+                          {isCompleted && (
+                            <span style={{ 
+                              background: 'var(--accent)', 
+                              color: '#000', 
+                              borderRadius: '50%', 
+                              width: 20, 
+                              height: 20, 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              fontSize: 12,
+                            }}>
+                              ✓
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
                           {workout.exercises.length} exercises
+                          {isCompleted && workout.caloriesBurned && (
+                            <span style={{ marginLeft: 8, color: 'var(--accent)' }}>
+                              · {workout.caloriesBurned} kcal
+                            </span>
+                          )}
                         </div>
                       </div>
                       <button
@@ -660,12 +710,26 @@ export default function TrainScreen() {
                           setExpandedExerciseIndex(0);
                         }}
                         style={{
-                          padding: '10px 16px', borderRadius: 8, border: 'none',
-                          background: 'var(--accent)', color: '#000', cursor: 'pointer',
+                          padding: '10px 16px', borderRadius: 8, border: isCompleted ? '1px solid var(--border)' : 'none',
+                          background: isCompleted ? 'var(--surface)' : 'var(--accent)', 
+                          color: isCompleted ? 'var(--muted)' : '#000', 
+                          cursor: 'pointer',
                           fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
                         }}
                       >
-                        <FiPlay size={12} /> Start
+                        {isCompleted ? '✓ Done' : <><FiPlay size={12} /> Start</>}
+                      </button>
+                      <button
+                        onClick={() => deleteWorkout(workout._id)}
+                        style={{
+                          padding: 8, borderRadius: 8, border: 'none',
+                          background: 'transparent', 
+                          color: 'var(--muted)', 
+                          cursor: 'pointer',
+                        }}
+                        title="Delete workout"
+                      >
+                        <FiTrash2 size={16} />
                       </button>
                     </div>
                   ) : (
@@ -688,77 +752,42 @@ export default function TrainScreen() {
                       {currentEx && (
                         <div style={{ padding: 20 }}>
                           <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 4 }}>{currentEx.exerciseName}</div>
-                          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
+                          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
                             {currentEx.sets} x {currentEx.reps} · {currentEx.restSeconds}s rest
                           </div>
                           
-                          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                            {Array.from({ length: currentEx.sets }).map((_, i) => (
-                              <div key={i} style={{
-                                flex: 1, height: 8, borderRadius: 4,
-                                background: 'var(--subtle)',
-                              }} />
-                            ))}
-                          </div>
-                          
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
-                            {[
-                              { reps: parseInt(currentEx.reps) || 10, weight: 0 },
-                              { reps: (parseInt(currentEx.reps) || 10) - 2, weight: 0 },
-                              { reps: (parseInt(currentEx.reps) || 10) + 2, weight: 0 },
-                              { reps: parseInt(currentEx.reps) || 10, weight: 5 },
-                            ].map((preset, i) => (
-                              <button
-                                key={i}
-                                onClick={() => {
-                                  if (expandedExerciseIndex < totalEx - 1) {
-                                    setExpandedExerciseIndex(expandedExerciseIndex + 1);
-                                  }
-                                }}
-                                style={{
-                                  padding: 14, borderRadius: 8, border: 'none',
-                                  background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer',
-                                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                                }}
-                              >
-                                <span style={{ fontSize: 18, fontWeight: 600 }}>{preset.reps}</span>
-                                <span style={{ fontSize: 10, color: 'var(--muted)' }}>{preset.weight > 0 ? `+${preset.weight}kg` : 'reps'}</span>
-                              </button>
-                            ))}
-                          </div>
-                          
                           {nextEx && (
-                            <div style={{ padding: '10px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Next</span>
-                              <span style={{ fontSize: 13, color: 'var(--text)' }}>{nextEx.name}</span>
-                              <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 'auto' }}>{nextEx.sets} x {nextEx.reps}</span>
+                            <div style={{ padding: '12px 14px', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                              <div>
+                                <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Up Next</div>
+                                <div style={{ fontSize: 15, fontWeight: 500 }}>{nextEx.exerciseName}</div>
+                              </div>
+                              <div style={{ fontSize: 12, color: 'var(--muted)' }}>{nextEx.sets} x {nextEx.reps}</div>
                             </div>
                           )}
                           
-                          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-                            {expandedExerciseIndex > 0 && (
-                              <button
-                                onClick={() => setExpandedExerciseIndex(expandedExerciseIndex - 1)}
-                                style={{
-                                  flex: 1, padding: 12, borderRadius: 8, border: '1px solid var(--border)',
-                                  background: 'transparent', color: 'var(--text)', cursor: 'pointer',
-                                  fontSize: 13, fontWeight: 500,
-                                }}
-                              >
-                                Previous
-                              </button>
-                            )}
-                            <button
-                              onClick={() => startWorkout(workout)}
-                              style={{
-                                flex: 1, padding: 12, borderRadius: 8, border: 'none',
-                                background: 'var(--accent)', color: '#000', cursor: 'pointer',
-                                fontSize: 13, fontWeight: 600,
-                              }}
-                            >
-                              {expandedExerciseIndex === totalEx - 1 ? 'Finish' : 'Next Exercise'}
-                            </button>
-                          </div>
+                          <button
+                            onClick={async () => {
+                              if (expandedExerciseIndex < totalEx - 1) {
+                                setExpandedExerciseIndex(expandedExerciseIndex + 1);
+                              } else {
+                                await fetch('/api/workouts', {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ workoutId: workout._id, action: 'complete' }),
+                                });
+                                fetchWorkouts();
+                                setExpandedWorkoutId(null);
+                              }
+                            }}
+                            style={{
+                              width: '100%', padding: 16, borderRadius: 10, border: 'none',
+                              background: 'var(--accent)', color: '#000', cursor: 'pointer',
+                              fontSize: 15, fontWeight: 600,
+                            }}
+                          >
+                            {expandedExerciseIndex === totalEx - 1 ? 'Done' : 'Next Exercise'}
+                          </button>
                         </div>
                       )}
                     </div>

@@ -13,6 +13,7 @@ export interface Meal {
   servingSize: string;
   time: string;
   createdAt: Date;
+  fromMealPlan?: string;
 }
 
 export async function getMealsCollection() {
@@ -28,6 +29,7 @@ export async function addMeal(data: {
   carbs: number;
   fat: number;
   servingSize: string;
+  fromMealPlan?: string | null;
 }): Promise<Meal> {
   const collection = await getMealsCollection();
   
@@ -46,6 +48,7 @@ export async function addMeal(data: {
     servingSize: data.servingSize,
     time,
     createdAt: now,
+    ...(data.fromMealPlan && { fromMealPlan: data.fromMealPlan }),
   };
 
   const result = await collection.insertOne(meal as Meal);

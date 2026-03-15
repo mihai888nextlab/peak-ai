@@ -9,6 +9,10 @@ export interface UserGoals {
   proteinGoal: number;
   carbsGoal: number;
   fatGoal: number;
+  gender?: 'male' | 'female' | 'other';
+  height?: number;
+  weight?: number;
+  waterGoal?: number;
   createdAt: Date;
   updatedAt: Date;
 }

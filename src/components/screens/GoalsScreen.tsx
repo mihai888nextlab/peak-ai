@@ -15,6 +15,17 @@ interface UserGoals {
   proteinGoal: number;
   carbsGoal: number;
   fatGoal: number;
+  gender?: 'male' | 'female' | 'other';
+  height?: number;
+  weight?: number;
+  waterGoal?: number;
+  recommendations?: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    water: number;
+  } | null;
 }
 
 interface Props {
@@ -32,6 +43,10 @@ export default function GoalsScreen({ goals, onSave }: Props) {
     proteinGoal: goals?.proteinGoal || 180,
     carbsGoal: goals?.carbsGoal || 300,
     fatGoal: goals?.fatGoal || 80,
+    gender: goals?.gender || 'male',
+    height: goals?.height || 175,
+    weight: goals?.weight || 75,
+    waterGoal: goals?.waterGoal || 2500,
   });
   const [saving, setSaving] = useState(false);
 
@@ -43,6 +58,10 @@ export default function GoalsScreen({ goals, onSave }: Props) {
         proteinGoal: goals.proteinGoal,
         carbsGoal: goals.carbsGoal,
         fatGoal: goals.fatGoal,
+        gender: goals.gender || 'male',
+        height: goals.height || 175,
+        weight: goals.weight || 75,
+        waterGoal: goals.waterGoal || 2500,
       });
     }
   }, [goals]);
@@ -162,6 +181,11 @@ export default function GoalsScreen({ goals, onSave }: Props) {
             <div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
                 Daily Calories
+                {goals?.recommendations && (
+                  <span style={{ fontWeight: 400, fontSize: 9, color: 'var(--accent)', marginLeft: 6 }}>
+                    Rec: {goals.recommendations.calories} kcal
+                  </span>
+                )}
               </div>
               {editing ? (
                 <input
@@ -190,23 +214,19 @@ export default function GoalsScreen({ goals, onSave }: Props) {
               {editing ? (
                 <select
                   value={formData.goalType}
-                  onChange={(e) => setFormData({ ...formData, goalType: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, goalType: e.target.value as 'maintain' | 'bulk' | 'cut' })}
                   style={{
                     width: '100%', padding: '12px 16px', fontSize: 16,
                     background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8,
-                    color: 'var(--text)', outline: 'none', cursor: 'pointer',
+                    color: 'var(--text)', outline: 'none',
                   }}
                 >
                   <option value="maintain">Maintain Weight</option>
-                  <option value="bulk">Bulk (Surplus)</option>
-                  <option value="cut">Cut (Deficit)</option>
+                  <option value="bulk">Bulking</option>
+                  <option value="cut">Cutting</option>
                 </select>
               ) : (
-                <div style={{ 
-                  fontFamily: 'var(--font-display)', fontSize: 24, 
-                  color: getGoalTypeColor(formData.goalType),
-                  textTransform: 'capitalize',
-                }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: getGoalTypeColor(formData.goalType) }}>
                   {getGoalTypeLabel(formData.goalType)}
                 </div>
               )}
@@ -216,6 +236,11 @@ export default function GoalsScreen({ goals, onSave }: Props) {
             <div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
                 Protein Goal
+                {goals?.recommendations && (
+                  <span style={{ fontWeight: 400, fontSize: 9, color: 'var(--accent)', marginLeft: 6 }}>
+                    Rec: {goals.recommendations.protein}g
+                  </span>
+                )}
               </div>
               {editing ? (
                 <input
@@ -240,6 +265,11 @@ export default function GoalsScreen({ goals, onSave }: Props) {
             <div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
                 Carbs Goal
+                {goals?.recommendations && (
+                  <span style={{ fontWeight: 400, fontSize: 9, color: 'var(--accent)', marginLeft: 6 }}>
+                    Rec: {goals.recommendations.carbs}g
+                  </span>
+                )}
               </div>
               {editing ? (
                 <input
@@ -264,6 +294,11 @@ export default function GoalsScreen({ goals, onSave }: Props) {
             <div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
                 Fat Goal
+                {goals?.recommendations && (
+                  <span style={{ fontWeight: 400, fontSize: 9, color: 'var(--accent)', marginLeft: 6 }}>
+                    Rec: {goals.recommendations.fat}g
+                  </span>
+                )}
               </div>
               {editing ? (
                 <input
@@ -280,6 +315,35 @@ export default function GoalsScreen({ goals, onSave }: Props) {
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, color: 'var(--orange)' }}>
                   {formData.fatGoal}
                   <span style={{ fontSize: 14, color: 'var(--muted)', marginLeft: 4 }}>g</span>
+                </div>
+              )}
+            </div>
+
+            {/* Water Goal */}
+            <div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
+                Water Goal
+                {goals?.recommendations && (
+                  <span style={{ fontWeight: 400, fontSize: 9, color: 'var(--accent)', marginLeft: 6 }}>
+                    Rec: {goals.recommendations.water}ml
+                  </span>
+                )}
+              </div>
+              {editing ? (
+                <input
+                  type="number"
+                  value={formData.waterGoal}
+                  onChange={(e) => setFormData({ ...formData, waterGoal: Number(e.target.value) })}
+                  style={{
+                    width: '100%', padding: '12px 16px', fontSize: 24, fontFamily: 'var(--font-display)',
+                    background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8,
+                    color: 'var(--text)', outline: 'none',
+                  }}
+                />
+              ) : (
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, color: 'var(--blue)' }}>
+                  {formData.waterGoal}
+                  <span style={{ fontSize: 14, color: 'var(--muted)', marginLeft: 4 }}>ml</span>
                 </div>
               )}
             </div>

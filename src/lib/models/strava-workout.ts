@@ -91,10 +91,15 @@ export async function getStravaWorkoutsByDateRange(
   limit: number = 100
 ): Promise<StravaWorkout[]> {
   const collection = await getStravaWorkoutsCollection();
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999);
+  
   return collection
     .find({ 
       userId, 
-      startDate: { $gte: startDate, $lte: endDate }
+      startDate: { $gte: start.toISOString(), $lte: end.toISOString() }
     })
     .sort({ startDate: -1 })
     .limit(limit)

@@ -45,7 +45,7 @@ export async function getOrCreateOpenWearablesUser(peakUserId: string): Promise<
 
   const user = await findUserById(peakUserId);
   if (!user) {
-    console.error('User not found in MongoDB:', peakUserId, '- using default user');
+    console.error('User not found in MongoDB:', peakUserId, '- trying default user');
     return getOrFindDefaultUser();
   }
 
@@ -58,6 +58,21 @@ export async function getOrCreateOpenWearablesUser(peakUserId: string): Promise<
     }
   }
 
+  // Try to find existing user by email in OpenWearables
+  if (user.email) {
+    const searchRes = await fetch(`${API_URL}/api/v1/users?email=${encodeURIComponent(user.email)}`, {
+      headers: authHeaders,
+    });
+    if (searchRes.ok) {
+      const searchData = await searchRes.json();
+      if (searchData.items && searchData.items.length > 0) {
+        const existingUser = searchData.items[0];
+        await updateUserOpenWearablesId(peakUserId, existingUser.id);
+        return existingUser.id;
+      }
+    }
+  }
+  
   const createRes = await fetch(`${API_URL}/api/v1/users`, {
     method: 'POST',
     headers: {

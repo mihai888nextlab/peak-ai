@@ -48,29 +48,35 @@ export default function BriefScreen({ userName, onNavigate }: Props) {
       let fromWorkouts = 0;
       const today = new Date().toISOString().split('T')[0];
       
-      const dailyRes = await fetch('/api/daily-summary');
-      if (dailyRes.ok) {
-        const dailyData = await dailyRes.json();
-        if (dailyData) {
-          fromWorkouts = dailyData.caloriesBurned || 0;
-          if (fromFood === 0 && dailyData.caloriesFromFood > 0) {
-            fromFood = dailyData.caloriesFromFood;
-          }
+      // Get calories from Strava workouts
+      const res = await fetch(`/api/strava-workouts`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.workouts) {
+          const todayStr = today;
+          data.workouts.forEach((w: any) => {
+            if (w.startDate && w.startDate.startsWith(todayStr)) {
+              fromWorkouts += w.estimatedCalories || w.calories || 0;
+            }
+          });
         }
       }
       
-      if (fromWorkouts === 0) {
-        const res = await fetch(`/api/strava-workouts`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.workouts) {
-            const todayStr = today;
-            data.workouts.forEach((w: any) => {
-              if (w.startDate && w.startDate.startsWith(todayStr)) {
-                fromWorkouts += w.estimatedCalories || w.calories || 0;
+      // Get calories from Your Workouts
+      const workoutsRes = await fetch('/api/workouts');
+      if (workoutsRes.ok) {
+        const workoutsData = await workoutsRes.json();
+        if (workoutsData.workouts) {
+          const todayStr = today;
+          const todayDate = new Date(todayStr);
+          workoutsData.workouts.forEach((w: any) => {
+            if (w.lastCompletedAt) {
+              const completedDate = new Date(w.lastCompletedAt).toISOString().split('T')[0];
+              if (completedDate === todayStr) {
+                fromWorkouts += w.caloriesBurned || 0;
               }
-            });
-          }
+            }
+          });
         }
       }
       

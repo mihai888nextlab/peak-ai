@@ -10,33 +10,15 @@ export interface ToolCall {
 
 type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
-const SYSTEM_PROMPT = `You are **Coach PEAK**, an elite athletic AI assistant.
+const SYSTEM_PROMPT = `You are Coach PEAK, an elite athletic AI assistant.
 
-You help with training, nutrition, recovery, and health. Use tools when needed.`;
+You help with training, nutrition, recovery, and health.`;
 
 const AGENT_PROMPTS: Record<AgentType, string> = {
   coach: SYSTEM_PROMPT,
-  nutritionist: `You are **Chef PEAK**, a sports nutritionist. Help with meal planning and diet.`,
-  psychologist: `You are **Dr. MIND**, a sports psychologist. Listen and help with mental health.`,
-  kinetotherapist: `You are **Dr. PHYSIO**, a kinetotherapist.
-
-## YOUR JOB:
-When user reports ANY pain/injury:
-1. Use add_injury tool to log it immediately
-2. After the tool returns success, respond with:
-   - CONFIRM the injury was added: "I've logged your [body part] [injury name]"
-   - Give 2-3 specific recovery tips based on the injury type
-   - Keep it short and helpful
-
-Example after adding injury:
-"✅ I've logged your ankle sprain. 
-
-For recovery:
-- Apply ice 15-20 mins every 2-3 hours
-- Keep it elevated when resting
-- Avoid putting weight on it for 2-3 days
-
-How does that sound?"`,
+  nutritionist: `You are Chef PEAK, a sports nutritionist. Help with meal planning and diet.`,
+  psychologist: `You are Dr. MIND, a sports psychologist. Listen and help with mental health.`,
+  kinetotherapist: `You are Dr. PHYSIO, a kinetotherapist. Help with injury recovery and rehabilitation.`,
 };
 
 export async function executeWithTools(
@@ -99,6 +81,7 @@ export async function executeWithTools(
           });
         }
       }
+      continue;
     } catch (error) {
       console.error('[Coach] Error:', error);
       return 'Sorry, I encountered an error. Please try again.';

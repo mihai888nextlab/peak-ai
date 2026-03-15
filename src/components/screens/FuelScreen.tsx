@@ -30,6 +30,10 @@ interface UserGoals {
   proteinGoal: number;
   carbsGoal: number;
   fatGoal: number;
+  gender?: 'male' | 'female' | 'other';
+  height?: number;
+  weight?: number;
+  waterGoal?: number;
 }
 
 interface PlannedMeal {
@@ -71,13 +75,15 @@ export default function FuelScreen({ goals }: Props) {
     protein: goals.proteinGoal,
     carbs: goals.carbsGoal,
     fat: goals.fatGoal,
-  } : DEFAULT_GOALS;
+    water: goals.waterGoal || 2500,
+  } : { ...DEFAULT_GOALS, water: 2500 };
   
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<FoodAnalysisResult | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const [waterIntake, setWaterIntake] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -115,6 +121,18 @@ export default function FuelScreen({ goals }: Props) {
     }
   };
 
+  const fetchWater = async () => {
+    try {
+      const res = await fetch('/api/water');
+      const data = await res.json();
+      if (data.amount !== undefined) {
+        setWaterIntake(data.amount);
+      }
+    } catch (err) {
+      console.error('Failed to fetch water:', err);
+    }
+  };
+
   const generateMealPlan = async () => {
     if (!goals?.dailyCalorieGoal) {
       setError('Please set your nutrition goals first');
@@ -145,6 +163,37 @@ export default function FuelScreen({ goals }: Props) {
   };
 
   const toggleMealEaten = async (mealId: string, eaten: boolean) => {
+    const meal = mealPlan?.meals.find(m => m.id === mealId);
+    if (!meal) return;
+
+    if (eaten) {
+      try {
+        await fetch('/api/meals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: meal.name,
+            calories: meal.calories,
+            protein: meal.protein,
+            carbs: meal.carbs,
+            fat: meal.fat,
+            servingSize: '1 serving',
+            fromMealPlan: mealId,
+          }),
+        });
+        fetchMeals();
+      } catch (err) {
+        console.error('Failed to log meal:', err);
+      }
+    } else {
+      try {
+        await fetch(`/api/meals?fromMealPlan=${mealId}`, { method: 'DELETE' });
+        fetchMeals();
+      } catch (err) {
+        console.error('Failed to remove meal:', err);
+      }
+    }
+
     try {
       const res = await fetch('/api/meal-plan', {
         method: 'POST',
@@ -177,6 +226,7 @@ export default function FuelScreen({ goals }: Props) {
   useEffect(() => {
     fetchMeals();
     fetchMealPlan();
+    fetchWater();
   }, []);
 
   const pct = Math.round((totals.calories / dailyGoals.calories) * 100);
@@ -346,6 +396,34 @@ export default function FuelScreen({ goals }: Props) {
     }
   };
 
+  const addWater = async (amount: number) => {
+    try {
+      await fetch('/api/water', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount }),
+      });
+      fetchWater();
+    } catch (err) {
+      console.error('Failed to log water:', err);
+      setWaterIntake(prev => prev + amount);
+    }
+  };
+
+  const resetWater = async () => {
+    try {
+      await fetch('/api/water', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: -waterIntake }),
+      });
+      setWaterIntake(0);
+    } catch (err) {
+      console.error('Failed to reset water:', err);
+      setWaterIntake(0);
+    }
+  };
+
   const isOverGoal = (calories: number, isNewMeal: boolean = false) => {
     const currentTotal = isNewMeal ? totals.calories : totals.calories - calories;
     const wouldBeOver = (currentTotal + calories) > dailyGoals.calories;
@@ -415,6 +493,54 @@ export default function FuelScreen({ goals }: Props) {
                 <AnimatedBar pct={Math.min(100, Math.round((m.current / m.goal) * 100))} color={m.color} height={7} />
               </div>
             ))}
+          </Card>
+
+          <Card style={{ padding: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                Water Intake
+              </div>
+              <button
+                onClick={resetWater}
+                style={{
+                  background: 'none', border: 'none',
+                  color: 'var(--muted)', cursor: 'pointer',
+                  fontSize: 10, padding: 2,
+                }}
+              >
+                Reset
+              </button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 14 }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 36, lineHeight: 1, color: 'var(--blue)' }}>
+                {waterIntake}
+              </span>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: 'var(--muted)' }}>
+                / {dailyGoals.water}ml
+              </span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--blue)', letterSpacing: '0.06em', marginLeft: 4 }}>
+                {Math.min(100, Math.round((waterIntake / dailyGoals.water) * 100))}%
+              </span>
+            </div>
+            <AnimatedBar pct={Math.min(100, Math.round((waterIntake / dailyGoals.water) * 100))} color="var(--blue)" height={8} />
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              {[250, 500, 750].map(amount => (
+                <button
+                  key={amount}
+                  onClick={() => addWater(amount)}
+                  style={{
+                    flex: 1, padding: '10px 8px', borderRadius: 8,
+                    background: 'var(--subtle)', border: '1px solid var(--border)',
+                    color: 'var(--text)', fontSize: 12, cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                >
+                  +{amount}ml
+                </button>
+              ))}
+            </div>
           </Card>
 
           {showCamera ? (

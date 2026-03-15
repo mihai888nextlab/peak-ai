@@ -53,15 +53,17 @@ export default function HistoryScreen() {
     const { startDate, endDate } = getDateRange();
 
     try {
-      const [summariesRes, mealsRes, workoutsRes] = await Promise.all([
+      const [summariesRes, mealsRes, stravaWorkoutsRes, customWorkoutsRes] = await Promise.all([
         fetch(`/api/daily-summary?start_date=${startDate}&end_date=${endDate}`),
         fetch(`/api/meals?start_date=${startDate}&end_date=${endDate}`),
         fetch(`/api/strava-workouts?start_date=${startDate}&end_date=${endDate}&limit=100`),
+        fetch(`/api/workouts`),
       ]);
 
       const summariesData = summariesRes.ok ? await summariesRes.json() : { summaries: [] };
       const mealsData = mealsRes.ok ? await mealsRes.json() : { meals: [] };
-      const workoutsData = workoutsRes.ok ? await workoutsRes.json() : { workouts: [] };
+      const stravaWorkoutsData = stravaWorkoutsRes.ok ? await stravaWorkoutsRes.json() : { workouts: [] };
+      const customWorkoutsData = customWorkoutsRes.ok ? await customWorkoutsRes.json() : { workouts: [] };
 
       const mealsByDate: Record<string, DayData['meals']> = {};
       mealsData.meals?.forEach((m: any) => {
@@ -77,7 +79,8 @@ export default function HistoryScreen() {
       });
 
       const workoutsByDate: Record<string, DayData['workouts']> = {};
-      workoutsData.workouts?.forEach((w: any) => {
+
+      stravaWorkoutsData.workouts?.forEach((w: any) => {
         const date = w.startDate?.split('T')[0];
         if (date) {
           if (!workoutsByDate[date]) workoutsByDate[date] = [];
@@ -87,6 +90,20 @@ export default function HistoryScreen() {
             duration: `${mins} min`,
             calories: w.estimatedCalories || w.calories || 0,
             type: w.sportType || w.type || 'Workout',
+          });
+        }
+      });
+
+      customWorkoutsData.workouts?.forEach((w: any) => {
+        const date = w.createdAt?.split('T')[0];
+        if (date) {
+          if (!workoutsByDate[date]) workoutsByDate[date] = [];
+          const mins = Math.round((w.estimatedDuration || 0) / 60);
+          workoutsByDate[date].push({
+            name: w.name,
+            duration: `${mins} min`,
+            calories: w.caloriesBurned || 0,
+            type: 'Custom Workout',
           });
         }
       });

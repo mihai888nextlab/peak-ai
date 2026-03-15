@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Screen } from '@/lib/data';
 import { Card } from '../ui';
 import { FiUser, FiActivity, FiTrendingUp, FiAward, FiTarget, FiCalendar, FiEdit, FiZap } from 'react-icons/fi';
@@ -15,6 +16,12 @@ interface Props {
     email?: string | null;
     image?: string | null;
   } | null;
+}
+
+interface UserGoals {
+  gender?: 'male' | 'female' | 'other';
+  height?: number;
+  weight?: number;
 }
 
 const PROFILE_STATS = {
@@ -39,6 +46,41 @@ const ACHIEVEMENTS = [
 ];
 
 export default function ProfileScreen({ onNavigate, user }: Props) {
+  const [userGoals, setUserGoals] = useState<UserGoals>({});
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  
+  useEffect(() => {
+    fetch('/api/goals')
+      .then(res => res.json())
+      .then(data => {
+        if (data.gender || data.height || data.weight) {
+          setUserGoals({
+            gender: data.gender,
+            height: data.height,
+            weight: data.weight,
+          });
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await fetch('/api/goals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...userGoals, applyRecommendations: true }),
+      });
+      setEditing(false);
+    } catch (error) {
+      console.error('Failed to save:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const displayName = user?.name || 'Athlete';
   const displayEmail = user?.email || '';
   const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -137,26 +179,65 @@ export default function ProfileScreen({ onNavigate, user }: Props) {
               Body Metrics
             </div>
             <button
+              onClick={() => editing ? handleSave() : setEditing(true)}
+              disabled={saving}
               style={{
-                background: 'transparent', border: 'none', color: 'var(--muted)',
+                background: 'transparent', border: 'none', color: editing ? 'var(--accent)' : 'var(--muted)',
                 cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
                 fontSize: 12, padding: '4px 8px', borderRadius: 6,
                 transition: 'all 0.2s',
               }}
-              onMouseEnter={e => { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'var(--subtle)'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}
+              onMouseEnter={e => { if (!editing) { e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'var(--subtle)'; }}}
+              onMouseLeave={e => { if (!editing) { e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.background = 'transparent'; }}}
             >
               <FiEdit size={14} />
-              Edit
+              {editing ? (saving ? 'Saving...' : 'Save') : 'Edit'}
             </button>
           </div>
           
-          {[
-            { icon: FiUser, label: 'Weight', value: `${BODY_METRICS.weight} kg`, color: 'var(--accent)' },
-            { icon: FiTarget, label: 'Height', value: `${BODY_METRICS.height} cm`, color: 'var(--blue)' },
-            { icon: FiActivity, label: 'Body Fat', value: `${BODY_METRICS.bodyFat}%`, color: 'var(--orange)' },
-            { icon: FiTrendingUp, label: 'Muscle Mass', value: `${BODY_METRICS.muscleMass} kg`, color: 'var(--purple)' },
-          ].map((metric, i) => (
+          {editing ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>Gender</div>
+                <select
+                  value={userGoals.gender || 'male'}
+                  onChange={(e) => setUserGoals({ ...userGoals, gender: e.target.value as any })}
+                  style={{ width: '100%', padding: 8, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }}
+                >
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>Height (cm)</div>
+                  <input
+                    type="number"
+                    value={userGoals.height || ''}
+                    onChange={(e) => setUserGoals({ ...userGoals, height: Number(e.target.value) })}
+                    style={{ width: '100%', padding: 8, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }}
+                  />
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>Weight (kg)</div>
+                  <input
+                    type="number"
+                    value={userGoals.weight || ''}
+                    onChange={(e) => setUserGoals({ ...userGoals, weight: Number(e.target.value) })}
+                    style={{ width: '100%', padding: 8, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)' }}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+            {[
+              { icon: FiUser, label: 'Weight', value: `${userGoals.weight || '--'} kg`, color: 'var(--accent)' },
+              { icon: FiTarget, label: 'Height', value: `${userGoals.height || '--'} cm`, color: 'var(--blue)' },
+              { icon: FiActivity, label: 'Body Fat', value: '--%', color: 'var(--orange)' },
+              { icon: FiTrendingUp, label: 'Muscle Mass', value: '-- kg', color: 'var(--purple)' },
+            ].map((metric, i) => (
             <div key={metric.label} style={{
               display: 'flex', alignItems: 'center', gap: 12,
               padding: '12px 0', borderBottom: i < 3 ? '1px solid var(--border)' : 'none',
@@ -177,10 +258,10 @@ export default function ProfileScreen({ onNavigate, user }: Props) {
                 {metric.value}
               </div>
             </div>
-          ))}
+            ))}
+            </>
+          )}
         </Card>
-
-        {/* Achievements Card */}
         <Card style={{ padding: 20 }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16 }}>
             Recent Achievements

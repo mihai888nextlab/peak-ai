@@ -8,9 +8,11 @@ import { estimateCaloriesWithAI } from '@/lib/calories';
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  if (!session?.user?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const userId = session.user.email;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -20,12 +22,12 @@ export async function GET(request: NextRequest) {
     
     let workouts;
     if (startDate && endDate) {
-      workouts = await getStravaWorkoutsByDateRange(session.user.id, startDate, endDate, limit);
+      workouts = await getStravaWorkoutsByDateRange(userId, startDate, endDate, limit);
     } else {
-      workouts = await getUserStravaWorkouts(session.user.id, limit);
+      workouts = await getUserStravaWorkouts(userId, limit);
     }
     
-    const summaries = await getUserDailySummaries(session.user.id, '2025-01-01', '2030-12-31');
+    const summaries = await getUserDailySummaries(userId, '2025-01-01', '2030-12-31');
     return NextResponse.json({ workouts, summaries });
   } catch (error) {
     console.error('Failed to fetch workouts:', error);
@@ -35,9 +37,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  if (!session?.user?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const userId = session.user.email;
 
   try {
     const body = await request.json();
@@ -47,13 +51,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Workouts array required' }, { status: 400 });
     }
 
-    const saved = await saveMultipleStravaWorkouts(session.user.id, workouts);
+    const saved = await saveMultipleStravaWorkouts(userId, workouts);
     
     let updatedCount = 0;
     const caloriesByDate: Record<string, number> = {};
     
     if (estimateCalories) {
-      const allWorkouts = await getUserStravaWorkouts(session.user.id, 50);
+      const allWorkouts = await getUserStravaWorkouts(userId, 50);
       
       for (const workout of allWorkouts) {
         if (!workout.estimatedCalories) {
@@ -78,7 +82,7 @@ export async function POST(request: NextRequest) {
       for (const [date, calories] of Object.entries(caloriesByDate)) {
         const collection = await getDailySummaryCollection();
         await collection.updateOne(
-          { userId: session.user.id, date },
+          { userId, date },
           { 
             $inc: { caloriesBurned: calories, workoutsCompleted: 1 },
             $set: { updatedAt: new Date() }
