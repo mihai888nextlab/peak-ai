@@ -34,6 +34,7 @@ export interface ToolResult {
   success: boolean;
   data?: any;
   error?: string;
+  _redirect?: { type: 'workout' | 'meal'; id: string } | null;
 }
 
 async function getUserId(): Promise<string> {
@@ -392,8 +393,9 @@ export async function generate_workout(args: {
     let exercises: any[] = [];
     try {
       exercises = await getAllExercises();
+      console.log('[generate_workout] Exercises from DB:', exercises.length);
     } catch (e) {
-      console.log('[generate_workout] No exercises in DB, using defaults');
+      console.log('[generate_workout] No exercises in DB, using defaults', e);
     }
 
     const splitInput = args.split_type || '';
@@ -485,7 +487,9 @@ export async function generate_workout(args: {
         console.error('Failed to auto-save workout:', e);
       }
     }
-
+    
+    const workoutId = savedWorkout ? savedWorkout._id.toString() : null;
+    
     return {
       success: true,
       data: {
@@ -493,9 +497,10 @@ export async function generate_workout(args: {
         split_type: splitType,
         exercises: selected,
         saved: !!savedWorkout,
-        workout_id: savedWorkout?._id?.toString(),
+        workout_id: workoutId,
         notes: `A ${splitType} workout targeting ${targetMuscles.join(', ')}. ${savedWorkout ? 'Saved to your workouts!' : ''}`,
       },
+      _redirect: workoutId ? { type: 'workout' as const, id: workoutId } : null,
     };
   } catch (error) {
     return { success: false, error: String(error) };

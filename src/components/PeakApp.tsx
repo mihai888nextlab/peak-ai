@@ -52,6 +52,17 @@ export default function PeakApp() {
     }
   }, [session]);
 
+  useEffect(() => {
+    const handleNavigate = (e: Event) => {
+      const targetScreen = (e as CustomEvent<string>).detail;
+      if (targetScreen && typeof targetScreen === 'string') {
+        setScreen(targetScreen as Screen);
+      }
+    };
+    window.addEventListener('navigate', handleNavigate as EventListener);
+    return () => window.removeEventListener('navigate', handleNavigate as EventListener);
+  }, []);
+
   const updateGoals = (newGoals: UserGoals) => {
     setGoals(newGoals);
   };

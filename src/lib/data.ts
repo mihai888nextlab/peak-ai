@@ -6,6 +6,10 @@ export interface Message {
   text: string;
   time: string;
   showWave?: boolean;
+  redirect?: {
+    type: 'workout' | 'meal';
+    id: string;
+  };
 }
 
 export const ATHLETE = {

@@ -18,6 +18,31 @@ interface ChatMessage {
   content: string;
 }
 
+interface RedirectAction {
+  type: 'workout' | 'meal';
+  id: string;
+}
+
+function parseMarkdown(text: string): { html: string; redirect?: RedirectAction } {
+  const redirectMatch = text.match(/\[\[REDIRECT:(\w+):([^\]]+)\]\]/);
+  let redirect: RedirectAction | undefined;
+  let cleanText = text;
+  
+  if (redirectMatch) {
+    redirect = { type: redirectMatch[1] as 'workout' | 'meal', id: redirectMatch[2] };
+    cleanText = text.replace(/\[\[REDIRECT:\w+:[^\]]+\]\]/g, '');
+  }
+  
+  const html = cleanText
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/## (.+)/g, '<div style="font-size:16px;font-weight:600;margin:12px 0 6px">$1</div>')
+    .replace(/- (.+)/g, '<div style="margin-left:12px;margin-bottom:4px">• $1</div>')
+    .replace(/\n/g, '<br/>');
+    
+  return { html, redirect };
+}
+
 interface UserGoals {
   dailyCalorieGoal: number;
   goalType: 'maintain' | 'bulk' | 'cut';
@@ -33,15 +58,6 @@ interface Props {
 let idCounter = 100;
 const genId = () => String(++idCounter);
 const nowTime = () => new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-
-function parseMarkdown(text: string): string {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/## (.+)/g, '<div style="font-size:16px;font-weight:600;margin:12px 0 6px">$1</div>')
-    .replace(/- (.+)/g, '<div style="margin-left:12px;margin-bottom:4px">• $1</div>')
-    .replace(/\n/g, '<br/>');
-}
 
 const INITIAL_MESSAGES: Record<AgentType, string> = {
   coach: "Hey! I'm **Coach PEAK** — your AI athletic coach. I can help with training, nutrition, recovery, and more. What do you need?",
@@ -74,10 +90,11 @@ const QUICK_ACTIONS: Record<AgentType, { label: string; icon: React.ComponentTyp
 };
 
 function makeInitialMessage(agent: AgentType): Message {
+  const { html } = parseMarkdown(INITIAL_MESSAGES[agent]);
   return {
     id: '1',
     from: 'peak',
-    text: parseMarkdown(INITIAL_MESSAGES[agent]),
+    text: html,
     time: nowTime(),
     showWave: true,
   };
@@ -196,13 +213,14 @@ export default function CoachScreen({ goals }: Props) {
       });
 
       const data = await res.json();
-      const responseText = data.response ? parseMarkdown(data.response) : 'Sorry, I hit a snag. Try again.';
+      const { html, redirect } = data.response ? parseMarkdown(data.response) : { html: 'Sorry, I hit a snag. Try again.', redirect: undefined };
 
       const aiMessage: Message = {
         id: genId(),
         from: 'peak',
-        text: responseText,
+        text: html,
         time: nowTime(),
+        redirect,
       };
 
       setMessages(prev => [...prev, aiMessage]);
@@ -320,6 +338,27 @@ export default function CoachScreen({ goals }: Props) {
                 boxShadow: msg.from === 'user' ? '0 4px 12px rgba(200,255,0,0.15)' : 'none',
               }}>
                 <div dangerouslySetInnerHTML={{ __html: msg.text }} />
+                {msg.redirect && (
+                  <button
+                    onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'train' }))}
+                    style={{
+                      marginTop: 12,
+                      padding: '8px 16px',
+                      background: agentColor,
+                      border: 'none',
+                      borderRadius: 8,
+                      color: '#000',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    Go to Training →
+                  </button>
+                )}
               </div>
 
               <span style={{

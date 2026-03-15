@@ -12,7 +12,13 @@ type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
 const SYSTEM_PROMPT = `You are Coach PEAK, an elite athletic AI assistant.
 
-You help with training, nutrition, recovery, and health.`;
+You help with training, nutrition, recovery, and health.
+
+CRITICAL INSTRUCTIONS:
+- When you need user data (goals, injuries, readiness, workouts, nutrition), you MUST actually call the tool functions - do NOT describe them or ask the user to provide them
+- The tools will return the data automatically
+- DO NOT output tool names or descriptions in your response
+- Just call the tool and use the result`;
 
 const AGENT_PROMPTS: Record<AgentType, string> = {
   coach: SYSTEM_PROMPT,
@@ -38,6 +44,8 @@ export async function executeWithTools(
 
   console.log('[Coach] Agent:', agent, 'Messages:', conversation.length);
 
+  let foundRedirect: { type: 'workout' | 'meal'; id: string } | null = null;
+
   for (let i = 0; i < maxIterations; i++) {
     try {
       const result = await chatCompletion(conversation, {
@@ -48,7 +56,7 @@ export async function executeWithTools(
 
       if (typeof result === 'string') {
         console.log('[Coach] Direct response');
-        return result;
+        return foundRedirect ? `${result}\n\n[[REDIRECT:${foundRedirect.type}:${foundRedirect.id}]]` : result;
       }
 
       const { content, toolCalls } = result;
@@ -56,7 +64,8 @@ export async function executeWithTools(
       console.log('[Coach] Tool calls:', toolCalls?.length || 0);
 
       if (!toolCalls || toolCalls.length === 0) {
-        return content || '';
+        const finalResponse = content || '';
+        return foundRedirect ? `${finalResponse}\n\n[[REDIRECT:${foundRedirect.type}:${foundRedirect.id}]]` : finalResponse;
       }
 
       if (content) {
@@ -64,15 +73,28 @@ export async function executeWithTools(
       }
 
       for (const call of toolCalls) {
-        console.log('[Coach] Executing:', call.name);
+        console.log('[Coach] Executing:', call.name, 'args:', JSON.stringify(call.arguments));
         const fn = TOOL_FUNCTIONS[call.name];
         if (fn) {
-          const fnResult = await fn(call.arguments);
-          console.log('[Coach] Result:', JSON.stringify(fnResult).substring(0, 100));
-          conversation.push({
-            role: 'user',
-            content: JSON.stringify(fnResult),
-          });
+          try {
+            const fnResult = await fn(call.arguments);
+            console.log('[Coach] Result:', JSON.stringify(fnResult).substring(0, 200));
+            
+            if (fnResult._redirect) {
+              foundRedirect = fnResult._redirect;
+            }
+            
+            conversation.push({
+              role: 'user',
+              content: JSON.stringify(fnResult),
+            });
+          } catch (fnError) {
+            console.error('[Coach] Tool error:', fnError);
+            conversation.push({
+              role: 'user',
+              content: JSON.stringify({ error: String(fnError) }),
+            });
+          }
         } else {
           console.log('[Coach] Tool not found:', call.name);
           conversation.push({
@@ -84,11 +106,12 @@ export async function executeWithTools(
       continue;
     } catch (error) {
       console.error('[Coach] Error:', error);
-      return 'Sorry, I encountered an error. Please try again.';
+      return "Sorry, I encountered an error. Please try again. " + (error instanceof Error ? error.message : String(error));
     }
   }
 
-  return "I've been thinking about this. Could you try asking again?";
+  const finalMsg = "I've been thinking about this. Could you try asking again?";
+  return foundRedirect ? `${finalMsg}\n\n[[REDIRECT:${foundRedirect.type}:${foundRedirect.id}]]` : finalMsg;
 }
 
 export function getToolDefinitionsForLLM() {
