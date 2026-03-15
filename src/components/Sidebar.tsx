@@ -17,7 +17,6 @@ const SECONDARY_NAV = [
   { id: 'injuries' as Screen, icon: FiAlertCircle,   label: 'Injuries'    },
   { id: 'devices'  as Screen, icon: FiSmartphone,    label: 'Devices'     },
   { id: 'profile'  as Screen, icon: FiUser,          label: 'Profile'     },
-  { id: 'analytics' as Screen, icon: FiTrendingUp,   label: 'Analytics'   },
   { id: 'history'  as Screen, icon: FiClock,         label: 'History'     },
   { id: 'goals'    as Screen, icon: FiTarget,        label: 'Goals'       },
 ];

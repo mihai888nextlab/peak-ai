@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 const API_URL = process.env.OPENWEARABLES_API_URL || 'http://localhost:8000';
 const API_KEY = process.env.OPENWEARABLES_API_KEY;
@@ -27,7 +29,36 @@ async function getAuthToken(): Promise<string> {
   return cachedToken!;
 }
 
+async function getOrCreateOpenWearablesUserByEmail(email: string): Promise<string | null> {
+  const token = await getAuthToken();
+  
+  const searchRes = await fetch(`${API_URL}/api/v1/users?email=${encodeURIComponent(email)}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'X-Open-Wearables-API-Key': API_KEY || '',
+    },
+  });
+  
+  if (searchRes.ok) {
+    const searchData = await searchRes.json();
+    if (searchData.items && searchData.items.length > 0) {
+      console.log('[IMPORT] Found existing user:', searchData.items[0].id, searchData.items[0].email);
+      return searchData.items[0].id;
+    }
+  }
+  
+  console.log('[IMPORT] User not found for email:', email);
+  return null;
+}
+
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  console.log('[IMPORT] User email:', session.user.email);
+
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
@@ -43,56 +74,21 @@ export async function POST(request: NextRequest) {
 
     const token = await getAuthToken();
     
-    // Get or create user
-    let userId: string | null = null;
-    
-    const usersResponse = await fetch(`${API_URL}/api/v1/users?limit=1`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'X-Open-Wearables-API-Key': API_KEY || '',
-      },
-    });
-    
-    if (usersResponse.ok) {
-      const usersData = await usersResponse.json();
-      if (usersData.items && usersData.items.length > 0) {
-        userId = usersData.items[0].id;
-      }
-    }
+    const userId = await getOrCreateOpenWearablesUserByEmail(session.user.email);
     
     if (!userId) {
-      const createResponse = await fetch(`${API_URL}/api/v1/users`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'X-Open-Wearables-API-Key': API_KEY || '',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          first_name: 'PeakAI',
-          last_name: 'User',
-          email: 'peakai@local.dev',
-        }),
-      });
-      
-      if (createResponse.ok) {
-        const userData = await createResponse.json();
-        userId = userData.id;
-      }
+      console.error('[IMPORT] Could not find user for email:', session.user.email);
+      return NextResponse.json({ error: 'Could not find user. Please reconnect.' }, { status: 500 });
     }
     
-    if (!userId) {
-      return NextResponse.json({ error: 'Could not get or create user' }, { status: 500 });
-    }
+    console.log('[IMPORT] Using userId:', userId);
     
-    // Convert File to Buffer and create new FormData for the backend
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     
     const backendFormData = new FormData();
     backendFormData.append('file', new Blob([buffer]), file.name);
     
-    // Call the import endpoint
     const importResponse = await fetch(
       `${API_URL}/api/v1/users/${userId}/import/apple/xml/direct`,
       {
@@ -107,6 +103,7 @@ export async function POST(request: NextRequest) {
     
     if (!importResponse.ok) {
       const errorData = await importResponse.json().catch(() => ({}));
+      console.error('[IMPORT] Import failed:', errorData);
       return NextResponse.json(
         { error: errorData.detail || 'Import failed' },
         { status: importResponse.status }
@@ -114,7 +111,8 @@ export async function POST(request: NextRequest) {
     }
     
     const data = await importResponse.json();
-    return NextResponse.json({ success: true, message: 'Import successful', data });
+    console.log('[IMPORT] Success:', data);
+    return NextResponse.json({ success: true, message: 'Import successful', data, userId });
   } catch (error) {
     console.error('Import error:', error);
     return NextResponse.json(

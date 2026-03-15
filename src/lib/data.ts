@@ -1,4 +1,4 @@
-export type Screen = 'brief' | 'train' | 'fuel' | 'recover' | 'coach' | 'profile' | 'analytics' | 'history' | 'goals' | 'settings' | 'devices' | 'injuries';
+export type Screen = 'brief' | 'train' | 'fuel' | 'recover' | 'coach' | 'profile' | 'history' | 'goals' | 'settings' | 'devices' | 'injuries';
 
 export interface Message {
   id: string;

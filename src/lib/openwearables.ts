@@ -183,7 +183,7 @@ export async function getUserTimeseries(
 }
 
 export async function getActivitySummary(owUserId: string, date?: string) {
-  const params = date ? `?date=${date}` : '';
+  const params = date ? `?start_date=${date}&end_date=${date}` : '';
   const res = await fetch(`${API_URL}/api/v1/users/${owUserId}/summaries/activity${params}`, {
     headers: authHeaders,
   });
@@ -192,7 +192,7 @@ export async function getActivitySummary(owUserId: string, date?: string) {
 }
 
 export async function getSleepSummary(owUserId: string, date?: string) {
-  const params = date ? `?date=${date}` : '';
+  const params = date ? `?start_date=${date}&end_date=${date}` : '';
   const res = await fetch(`${API_URL}/api/v1/users/${owUserId}/summaries/sleep${params}`, {
     headers: authHeaders,
   });
@@ -201,7 +201,7 @@ export async function getSleepSummary(owUserId: string, date?: string) {
 }
 
 export async function getRecoverySummary(owUserId: string, date?: string) {
-  const params = date ? `?date=${date}` : '';
+  const params = date ? `?start_date=${date}&end_date=${date}` : '';
   const res = await fetch(`${API_URL}/api/v1/users/${owUserId}/summaries/recovery${params}`, {
     headers: authHeaders,
   });
@@ -210,7 +210,7 @@ export async function getRecoverySummary(owUserId: string, date?: string) {
 }
 
 export async function getBodySummary(owUserId: string, date?: string) {
-  const params = date ? `?date=${date}` : '';
+  const params = date ? `?start_date=${date}&end_date=${date}` : '';
   const res = await fetch(`${API_URL}/api/v1/users/${owUserId}/summaries/body${params}`, {
     headers: authHeaders,
   });

@@ -12,7 +12,6 @@ import FuelScreen    from './screens/FuelScreen';
 import RecoverScreen from './screens/RecoverScreen';
 import CoachScreen   from './screens/CoachScreen';
 import ProfileScreen from './screens/ProfileScreen';
-import AnalyticsScreen from './screens/AnalyticsScreen';
 import HistoryScreen from './screens/HistoryScreen';
 import GoalsScreen from './screens/GoalsScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -65,7 +64,6 @@ export default function PeakApp() {
       case 'recover': return <RecoverScreen />;
       case 'coach':   return <CoachScreen goals={goals} />;
       case 'profile': return <ProfileScreen user={session?.user} onNavigate={setScreen} />;
-      case 'analytics': return <AnalyticsScreen onNavigate={setScreen} />;
       case 'history': return <HistoryScreen />;
       case 'goals': return <GoalsScreen goals={goals} onSave={updateGoals} />;
       case 'settings': return <SettingsScreen user={session?.user} onLogout={() => signOut({ callbackUrl: '/' })} />;

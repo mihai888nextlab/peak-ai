@@ -84,8 +84,22 @@ function makeInitialMessage(agent: AgentType): Message {
 }
 
 export default function CoachScreen({ goals }: Props) {
-  const [selectedAgent, setSelectedAgent] = useState<AgentType>('coach');
-  const [messages, setMessages] = useState<Message[]>(() => [makeInitialMessage('coach')]);
+  const [selectedAgent, setSelectedAgent] = useState<AgentType>(() => {
+    const stored = sessionStorage.getItem('selectedAgent') as AgentType | null;
+    return stored && AGENTS[stored] ? stored : 'coach';
+  });
+  
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const stored = sessionStorage.getItem('coachMessages');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as Message[];
+        if (parsed.length > 0) return parsed;
+      } catch {}
+    }
+    return [makeInitialMessage('coach')];
+  });
+  
   const [isLoading, setIsLoading] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -98,9 +112,18 @@ export default function CoachScreen({ goals }: Props) {
   }, [messages, isLoading]);
 
   useEffect(() => {
+    if (!isSending.current) {
+      sessionStorage.setItem('coachMessages', JSON.stringify(messages));
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    sessionStorage.setItem('selectedAgent', selectedAgent);
+  }, [selectedAgent]);
+
+  useEffect(() => {
     const storedAgent = sessionStorage.getItem('selectedAgent') as AgentType | null;
     const storedMessages = sessionStorage.getItem('coachMessages');
-    const pendingMessage = sessionStorage.getItem('coachPendingMessage');
 
     const agent = storedAgent && AGENTS[storedAgent] ? storedAgent : 'coach';
     setSelectedAgent(agent);
@@ -110,19 +133,11 @@ export default function CoachScreen({ goals }: Props) {
         const parsed = JSON.parse(storedMessages) as Message[];
         if (parsed.length > 0) {
           setMessages(parsed);
-          if (pendingMessage) {
-            sessionStorage.removeItem('coachPendingMessage');
-            setTimeout(() => handleSendMessage(pendingMessage), 100);
-          }
           return;
         }
       } catch {}
     }
     setMessages([makeInitialMessage(agent)]);
-    if (pendingMessage) {
-      sessionStorage.removeItem('coachPendingMessage');
-      setTimeout(() => handleSendMessage(pendingMessage), 100);
-    }
   }, []);
 
   useEffect(() => {
@@ -157,6 +172,11 @@ export default function CoachScreen({ goals }: Props) {
 
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
+
+    const pendingMsg = sessionStorage.getItem('coachPendingMessage');
+    if (pendingMsg) {
+      sessionStorage.removeItem('coachPendingMessage');
+    }
 
     try {
       const currentMessages = [...messages, userMessage];
